@@ -8,6 +8,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import android.media.projection.MediaProjectionManager
+import android.content.Context
+import com.joker.floatingsubtitleapp.presentation.service.SubtitleService
 
 class MainActivity : ComponentActivity() {
 
@@ -21,6 +24,25 @@ class MainActivity : ComponentActivity() {
         } else {
             Toast.makeText(this, "오버레이 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private val projectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            // Phase 7에서 이 데이터를 서비스로 전달하여 캡처를 시작할 예정입니다.
+            val intent = Intent(this, SubtitleService::class.java).apply {
+                action = "START_CAPTURE"
+                putExtra("RESULT_CODE", result.resultCode)
+                putExtra("DATA", result.data)
+            }
+            startForegroundService(intent)
+        }
+    }
+
+    private fun startAudioCaptureWithPermission() {
+        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
