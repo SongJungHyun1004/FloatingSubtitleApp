@@ -9,9 +9,13 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
+import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class SubtitleService : Service() {
+    @Inject
+    lateinit var overlayController: OverlayController
 
     companion object {
         private const val CHANNEL_ID = "subtitle_service_channel"
@@ -25,8 +29,16 @@ class SubtitleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 여기서 나중에 오디오 캡처 로직을 시작할 예정입니다.
+        if (intent?.action == "START_CAPTURE") {
+            overlayController.show()
+            // 여기서 나중에 오디오 캡처 파이프라인을 연결합니다.
+        }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        overlayController.hide()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -51,4 +63,6 @@ class SubtitleService : Service() {
             manager.createNotificationChannel(serviceChannel)
         }
     }
+
+
 }
