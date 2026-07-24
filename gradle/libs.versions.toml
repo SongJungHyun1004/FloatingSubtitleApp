@@ -32,7 +32,7 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version = "1.2.0" }
 # AI & Media
-vosk-android = { group = "org.alphacephei", name = "vosk-android", version.ref = "vosk" }
+vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
 
 [plugins]
