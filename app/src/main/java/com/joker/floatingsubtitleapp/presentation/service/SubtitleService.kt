@@ -11,11 +11,20 @@ import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
 import javax.inject.Inject
+import com.joker.floatingsubtitleapp.domain.usecase.GetSubtitleFlowUseCase
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 
 @AndroidEntryPoint
 class SubtitleService : Service() {
     @Inject
     lateinit var overlayController: OverlayController
+
+    @Inject
+    lateinit var getSubtitleFlowUseCase: GetSubtitleFlowUseCase
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var captureJob: Job? = null
 
     companion object {
         private const val CHANNEL_ID = "subtitle_service_channel"
@@ -29,16 +38,47 @@ class SubtitleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "START_CAPTURE") {
-            overlayController.show()
-            // 여기서 나중에 오디오 캡처 파이프라인을 연결합니다.
+        when (intent?.action) {
+            "START_CAPTURE" -> {
+                val resultCode = intent.getIntExtra("RESULT_CODE", -1)
+                val data = intent.getParcelableExtra<Intent>("DATA")
+
+                if (resultCode != -1 && data != null) {
+                    startSubtitlePipeline(resultCode, data)
+                }
+            }
+            "STOP_CAPTURE" -> {
+                stopSelf()
+            }
         }
         return START_STICKY
     }
 
+    private fun startSubtitlePipeline(resultCode: Int, data: Intent) {
+        captureJob?.cancel() // 기존 작업이 있다면 취소
+        overlayController.show()
+
+        captureJob = serviceScope.launch {
+            // 엔진 초기화 (Vosk 모델 등 - Phase 4에서 정의한 init)
+            // 실제 앱에서는 여기서 언어 모델 다운로드 여부도 체크해야 함
+
+            getSubtitleFlowUseCase(
+                resultCode = resultCode,
+                data = data,
+                sourceLang = "en", // 임시 하드코딩 (Phase 8에서 설정화면 연결)
+                targetLang = "ko"
+            ).collectLatest { translatedText ->
+                overlayController.updateText(translatedText)
+            }
+        }
+    }
+
     override fun onDestroy() {
-        super.onDestroy()
+        captureJob?.cancel()
+        getSubtitleFlowUseCase.stop()
         overlayController.hide()
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
