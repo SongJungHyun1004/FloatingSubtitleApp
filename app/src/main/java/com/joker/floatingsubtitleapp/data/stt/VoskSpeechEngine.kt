@@ -18,7 +18,8 @@ import kotlin.text.isNotBlank
 
 @Singleton
 class VoskSpeechEngine @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val modelManager: VoskModelManager
 ) : SpeechRecognitionRepository {
 
     private var model: Model? = null
@@ -26,10 +27,9 @@ class VoskSpeechEngine @Inject constructor(
 
     override suspend fun initEngine(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            // TODO: Phase 8에서 실제 모델 파일을 assets에서 복사하여 로드하는 로직 추가 예정
-            // 현재는 컴파일 에러를 방지하기 위해 구조만 유지합니다.
             if (model == null) {
-                // model = Model("model-path-here")
+                val path = modelManager.prepareModel()
+                model = Model(path)
             }
         }
     }

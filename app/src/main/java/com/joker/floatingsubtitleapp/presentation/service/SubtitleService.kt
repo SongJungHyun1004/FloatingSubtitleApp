@@ -1,12 +1,15 @@
 package com.joker.floatingsubtitleapp.presentation.service
 
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
@@ -27,24 +30,49 @@ class SubtitleService : Service() {
     private var captureJob: Job? = null
 
     companion object {
+        private const val TAG = "SubtitleService"
         private const val CHANNEL_ID = "subtitle_service_channel"
         private const val NOTIFICATION_ID = 1
     }
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "onCreate() 호출됨")
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        startForegroundWithNotification()
+    }
+
+    private fun startForegroundWithNotification() {
+        val notification = createNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            } else {
+                0
+            }
+            startForeground(NOTIFICATION_ID, notification, foregroundType)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand action: ${intent?.action}")
         when (intent?.action) {
             "START_CAPTURE" -> {
-                val resultCode = intent.getIntExtra("RESULT_CODE", -1)
-                val data = intent.getParcelableExtra<Intent>("DATA")
+                val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) // 기본값 RESULT_CANCELED(0)
+                val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra("DATA", Intent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<Intent>("DATA")
+                }
 
-                if (resultCode != -1 && data != null) {
+                // ⭕ 수정: RESULT_OK (-1) 인지 정확히 검사
+                if (resultCode == Activity.RESULT_OK && data != null) {
                     startSubtitlePipeline(resultCode, data)
+                } else {
+                    Log.e(TAG, "MediaProjection Intent data 또는 resultCode가 유효하지 않습니다. (resultCode: $resultCode, data: $data)")
                 }
             }
             "STOP_CAPTURE" -> {
@@ -53,27 +81,30 @@ class SubtitleService : Service() {
         }
         return START_STICKY
     }
-
     private fun startSubtitlePipeline(resultCode: Int, data: Intent) {
-        captureJob?.cancel() // 기존 작업이 있다면 취소
+        Log.d(TAG, "startSubtitlePipeline 시작")
+        captureJob?.cancel()
         overlayController.show()
 
         captureJob = serviceScope.launch {
-            // 엔진 초기화 (Vosk 모델 등 - Phase 4에서 정의한 init)
-            // 실제 앱에서는 여기서 언어 모델 다운로드 여부도 체크해야 함
-
-            getSubtitleFlowUseCase(
-                resultCode = resultCode,
-                data = data,
-                sourceLang = "en", // 임시 하드코딩 (Phase 8에서 설정화면 연결)
-                targetLang = "ko"
-            ).collectLatest { translatedText ->
-                overlayController.updateText(translatedText)
+            try {
+                getSubtitleFlowUseCase(
+                    resultCode = resultCode,
+                    data = data,
+                    sourceLang = "en",
+                    targetLang = "ko"
+                ).collectLatest { translatedText ->
+                    Log.d(TAG, "수신된 자막: $translatedText")
+                    overlayController.updateText(translatedText)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Subtitle pipeline 에러 발생: ${e.message}", e)
             }
         }
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy() 호출됨")
         captureJob?.cancel()
         getSubtitleFlowUseCase.stop()
         overlayController.hide()
@@ -87,7 +118,7 @@ class SubtitleService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Floating Subtitle")
             .setContentText("Subtitle service is running...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now) // 임시 아이콘
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -100,9 +131,7 @@ class SubtitleService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(serviceChannel)
+            manager?.createNotificationChannel(serviceChannel)
         }
     }
-
-
 }
