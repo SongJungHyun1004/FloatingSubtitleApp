@@ -2,6 +2,8 @@ package com.joker.floatingsubtitleapp.di
 
 import com.joker.floatingsubtitleapp.data.audio.AudioCaptureRepositoryImpl
 import com.joker.floatingsubtitleapp.domain.repository.AudioCaptureRepository
+import com.joker.floatingsubtitleapp.data.stt.VoskSpeechEngine
+import com.joker.floatingsubtitleapp.domain.repository.SpeechRecognitionRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -17,4 +19,10 @@ abstract class RepositoryModule {
     abstract fun bindAudioCaptureRepository(
         audioCaptureRepositoryImpl: AudioCaptureRepositoryImpl
     ): AudioCaptureRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSpeechRecognitionRepository(
+        voskSpeechEngine: VoskSpeechEngine
+    ): SpeechRecognitionRepository
 }
