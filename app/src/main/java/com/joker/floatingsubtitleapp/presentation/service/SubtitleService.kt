@@ -86,7 +86,7 @@ class SubtitleService : Service() {
         captureJob?.cancel()
         overlayController.show()
 
-        captureJob = serviceScope.launch {
+        captureJob = serviceScope.launch(Dispatchers.IO) {
             try {
                 getSubtitleFlowUseCase(
                     resultCode = resultCode,
@@ -95,9 +95,15 @@ class SubtitleService : Service() {
                     targetLang = "ko"
                 ).collectLatest { translatedText ->
                     Log.d(TAG, "수신된 자막: $translatedText")
-                    overlayController.updateText(translatedText)
+
+                    // WindowManager/Compose View 갱신은 메인 스레드에서 수행
+                    withContext(Dispatchers.Main) {
+                        overlayController.updateText(translatedText)
+                    }
                 }
             } catch (e: Exception) {
+                // 3. captureJob?.cancel() 호출 시 발생하는 취소 예외는 정상 처리
+                if (e is CancellationException) throw e
                 Log.e(TAG, "Subtitle pipeline 에러 발생: ${e.message}", e)
             }
         }

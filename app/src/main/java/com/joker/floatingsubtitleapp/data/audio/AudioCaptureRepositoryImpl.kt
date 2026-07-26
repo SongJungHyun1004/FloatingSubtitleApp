@@ -8,6 +8,7 @@ import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.projection.MediaProjectionManager
+import android.util.Log
 import com.joker.floatingsubtitleapp.domain.repository.AudioCaptureRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,7 @@ class AudioCaptureRepositoryImpl @Inject constructor(
         val buffer = ShortArray(bufferSize / 2)
         while (currentCoroutineContext().isActive) {
             val readBytes = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+            Log.d("Pipeline_1_Audio", "Read bytes: $readBytes")
             if (readBytes > 0) {
                 emit(buffer.copyOf(readBytes))
             }
