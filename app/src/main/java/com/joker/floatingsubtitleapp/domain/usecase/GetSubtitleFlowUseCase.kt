@@ -8,6 +8,7 @@ import com.joker.floatingsubtitleapp.domain.repository.TranslateRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import javax.inject.Inject
 
 class GetSubtitleFlowUseCase @Inject constructor(
@@ -50,13 +51,29 @@ class GetSubtitleFlowUseCase @Inject constructor(
             .onEach { Log.d(TAG, "🗣️ STT 변환 결과: [$it]") }
 
         // 3. 실시간 번역 적용
-        return textFlow.map { originalText ->
-            Log.d(TAG, "🔄 번역 요청 시작: $originalText")
-            val translated = translateRepo.translate(originalText, sourceLang, targetLang)
-                .getOrDefault(originalText)
-            Log.d(TAG, "✅ 번역 완료: $translated")
-            translated
-        }
+        return textFlow
+            .onStart {
+                // 💡 번역 파이프라인 시작 전, 원본 언어와 대상 언어 모델 다운로드 보장
+                Log.d(TAG, "🌐 번역 모델 사전 점검 중... ($sourceLang -> $targetLang)")
+                translateRepo.downloadModelIfNeeded(sourceLang)
+                    .onFailure { Log.e(TAG, "❌ $sourceLang 모델 다운로드 실패", it) }
+                translateRepo.downloadModelIfNeeded(targetLang)
+                    .onFailure { Log.e(TAG, "❌ $targetLang 모델 다운로드 실패", it) }
+            }
+            .map { originalText ->
+                Log.d(TAG, "🔄 번역 요청 시작: $originalText")
+
+                val translateResult = translateRepo.translate(originalText, sourceLang, targetLang)
+
+                // 번역 실패 시 에러 원인 출력
+                translateResult.onFailure { e ->
+                    Log.e(TAG, "❌ 번역 실패 원인: ${e.message}", e)
+                }
+
+                val translated = translateResult.getOrDefault(originalText)
+                Log.d(TAG, "✅ 번역 완료: $translated")
+                translated
+            }
     }
 
     fun stop() {
