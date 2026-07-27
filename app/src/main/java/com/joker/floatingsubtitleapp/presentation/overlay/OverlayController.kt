@@ -16,6 +16,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
+import com.joker.floatingsubtitleapp.domain.model.SubtitleState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,7 +33,12 @@ class OverlayController @Inject constructor(
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
 
-    private val subtitleText = mutableStateOf("인식된 자막이 여기에 표시됩니다.")
+    private val subtitleState = mutableStateOf(
+        SubtitleState(
+            text = "인식된 자막이 여기에 표시됩니다.",
+            isFinal = true
+        )
+    )
 
     override val viewModelStore: ViewModelStore = ViewModelStore()
     override val lifecycle: LifecycleRegistry = LifecycleRegistry(this)
@@ -70,7 +76,7 @@ class OverlayController @Inject constructor(
 
                 setContent {
                     SubtitleOverlay(
-                        text = subtitleText.value,
+                        state = subtitleState.value,
                         onDrag = { dx, dy -> updatePosition(dx, dy) }
                     )
                 }
@@ -82,8 +88,11 @@ class OverlayController @Inject constructor(
         }
     }
 
-    fun updateText(newText: String) {
-        subtitleText.value = newText
+    fun updateText(newText: String, isFinal: Boolean) {
+        subtitleState.value = SubtitleState(
+            text = newText,
+            isFinal = isFinal
+        )
     }
 
     private fun updatePosition(dx: Float, dy: Float) {

@@ -2,6 +2,7 @@ package com.joker.floatingsubtitleapp.data.stt
 
 import android.content.Context
 import android.util.Log
+import com.joker.floatingsubtitleapp.domain.model.SpeechResult
 import com.joker.floatingsubtitleapp.domain.repository.SpeechRecognitionRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,7 @@ class VoskSpeechEngine @Inject constructor(
         }
     }
 
-    override fun recognize(audioData: Flow<ShortArray>): Flow<String> = callbackFlow {
+    override fun recognize(audioData: Flow<ShortArray>): Flow<SpeechResult> = callbackFlow {
         if (model == null) {
             val initResult = initEngine()
             if (initResult.isFailure) {
@@ -70,7 +71,13 @@ class VoskSpeechEngine @Inject constructor(
                     val text = JSONObject(resultJson).optString("text", "")
                     Log.d("Pipeline_2_STT", "Recognized text: $text")
                     if (text.isNotBlank()) {
-                        trySend(text)
+                        trySend(SpeechResult.Final(text))
+                    }
+                } else {
+                    val partialJson = recognizer.partialResult
+                    val partial = JSONObject(partialJson).optString("partial", "")
+                    if (partial.isNotBlank()) {
+                        trySend(SpeechResult.Partial(partial))
                     }
                 }
             }

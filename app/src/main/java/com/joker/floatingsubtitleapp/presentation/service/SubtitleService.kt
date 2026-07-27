@@ -93,12 +93,11 @@ class SubtitleService : Service() {
                     data = data,
                     sourceLang = "en",
                     targetLang = "ko"
-                ).collectLatest { translatedText ->
-                    Log.d(TAG, "수신된 자막: $translatedText")
+                ).collectLatest { state ->
+                    Log.d(TAG, "수신된 자막: ${state.text} (final=${state.isFinal})")
 
-                    // WindowManager/Compose View 갱신은 메인 스레드에서 수행
                     withContext(Dispatchers.Main) {
-                        overlayController.updateText(translatedText)
+                        overlayController.updateText(state.text, state.isFinal)
                     }
                 }
             } catch (e: Exception) {
