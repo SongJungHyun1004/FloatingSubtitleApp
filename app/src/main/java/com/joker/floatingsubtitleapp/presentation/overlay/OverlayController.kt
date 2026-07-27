@@ -88,9 +88,25 @@ class OverlayController @Inject constructor(
         }
     }
 
+    private var committedText = ""   // 확정된 자막 누적
+    private var partialText = ""     // 현재 입력 중
+
     fun updateText(newText: String, isFinal: Boolean) {
+        if (isFinal) {
+            committedText = (committedText + " " + newText).trim()
+            partialText = ""
+        } else {
+            partialText = newText
+        }
+
+        val displayText = if (partialText.isNotEmpty()) {
+            "$committedText\n$partialText"
+        } else {
+            committedText
+        }
+
         subtitleState.value = SubtitleState(
-            text = newText,
+            text = displayText,
             isFinal = isFinal
         )
     }
