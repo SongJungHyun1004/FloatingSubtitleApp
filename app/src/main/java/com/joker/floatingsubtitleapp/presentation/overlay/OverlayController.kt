@@ -18,6 +18,11 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import com.joker.floatingsubtitleapp.domain.model.SubtitleState
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,11 +95,19 @@ class OverlayController @Inject constructor(
 
     private var committedText = ""   // 확정된 자막 누적
     private var partialText = ""     // 현재 입력 중
+    private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     fun updateText(newText: String, isFinal: Boolean) {
         if (isFinal) {
             committedText = (committedText + " " + newText).trim()
+            committedText = committedText.takeLast(80)
             partialText = ""
+            // 일정 시간 후 제거
+            overlayScope.launch {
+                delay(3000) // 원하는 시간으로 조절
+                committedText = ""
+                subtitleState.value = SubtitleState("", false)
+            }
         } else {
             partialText = newText
         }
@@ -107,7 +120,7 @@ class OverlayController @Inject constructor(
 
         subtitleState.value = SubtitleState(
             text = displayText,
-            isFinal = isFinal
+            isFinal = partialText.isEmpty()
         )
     }
 

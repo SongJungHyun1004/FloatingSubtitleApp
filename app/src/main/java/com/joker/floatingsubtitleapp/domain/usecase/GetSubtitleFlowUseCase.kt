@@ -48,7 +48,7 @@ class GetSubtitleFlowUseCase @Inject constructor(
 //        }
         // 1. 오디오 캡처 파이프라인 검사
         val audioFlow = audioRepo.startCapture(resultCode, data)
-            .onEach { Log.d(TAG, "🎧 오디오 버퍼 수신: ${it.size} 사이즈") }
+//            .onEach { Log.d(TAG, "🎧 오디오 버퍼 수신: ${it.size} 사이즈") }
 
         // 2. STT 변환 파이프라인 검사
         val textFlow = sttRepo.recognize(audioFlow)
