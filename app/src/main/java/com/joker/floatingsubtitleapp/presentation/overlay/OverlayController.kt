@@ -20,6 +20,7 @@ import com.joker.floatingsubtitleapp.domain.model.SubtitleState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -40,8 +41,7 @@ class OverlayController @Inject constructor(
 
     private val subtitleState = mutableStateOf(
         SubtitleState(
-            text = "인식된 자막이 여기에 표시됩니다.",
-            isFinal = true
+            partialText = "인식된 자막이 여기에 표시됩니다."
         )
     )
 
@@ -93,35 +93,25 @@ class OverlayController @Inject constructor(
         }
     }
 
-    private var committedText = ""   // 확정된 자막 누적
-    private var partialText = ""     // 현재 입력 중
+
     private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var removeJob: Job? = null
 
-    fun updateText(newText: String, isFinal: Boolean) {
-        if (isFinal) {
-            committedText = (committedText + " " + newText).trim()
-            committedText = committedText.takeLast(80)
-            partialText = ""
-            // 일정 시간 후 제거
-            overlayScope.launch {
-                delay(3000) // 원하는 시간으로 조절
-                committedText = ""
-                subtitleState.value = SubtitleState("", false)
+
+    fun updateText(state: SubtitleState) {
+        subtitleState.value = state
+        if(state.finalizedLines.isNotEmpty()){
+            removeJob?.cancel()
+            removeJob = overlayScope.launch {
+                delay(3000)
+                val removed = state.finalizedLines.drop(1)
+                subtitleState.value =
+                    SubtitleState(
+                        finalizedLines = removed,
+                        partialText = state.partialText
+                    )
             }
-        } else {
-            partialText = newText
         }
-
-        val displayText = if (partialText.isNotEmpty()) {
-            "$committedText\n$partialText"
-        } else {
-            committedText
-        }
-
-        subtitleState.value = SubtitleState(
-            text = displayText,
-            isFinal = partialText.isEmpty()
-        )
     }
 
     private fun updatePosition(dx: Float, dy: Float) {

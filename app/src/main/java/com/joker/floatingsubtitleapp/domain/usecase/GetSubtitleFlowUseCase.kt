@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.scan
 import javax.inject.Inject
 
 class GetSubtitleFlowUseCase @Inject constructor(
@@ -66,9 +67,9 @@ class GetSubtitleFlowUseCase @Inject constructor(
             .sample(200) // ✅ 부분 결과 과도 호출 방지
             .map { speechResult ->
 
-                val (rawText, isFinal) = when (speechResult) {
-                    is SpeechResult.Partial -> speechResult.text to false
-                    is SpeechResult.Final -> speechResult.text to true
+                val rawText = when(speechResult){
+                    is SpeechResult.Partial -> speechResult.text
+                    is SpeechResult.Final -> speechResult.text
                 }
 
                 Log.d(TAG, "🔄 번역 요청 시작: $rawText")
@@ -81,12 +82,40 @@ class GetSubtitleFlowUseCase @Inject constructor(
 
                 val translated = translateResult.getOrDefault(rawText)
 
-                Log.d(TAG, "✅ 번역 완료: $translated (final=$isFinal)")
+                when(speechResult){
+                    is SpeechResult.Partial ->
+                        SubtitleState(
+                            partialText = translated
+                        )
 
-                SubtitleState(
-                    text = translated,
-                    isFinal = isFinal
-                )
+                    is SpeechResult.Final ->
+                        SubtitleState(
+                            finalizedLines = listOf(translated)
+                        )
+                }
+            }
+            .scan(SubtitleState()) { current, newState ->
+
+                if(newState.finalizedLines.isNotEmpty()){
+
+                    SubtitleState(
+                        finalizedLines =
+                            current.finalizedLines +
+                                    newState.finalizedLines,
+
+                        partialText = ""
+                    )
+
+                } else {
+
+                    SubtitleState(
+                        finalizedLines =
+                            current.finalizedLines,
+
+                        partialText =
+                            newState.partialText
+                    )
+                }
             }
     }
 

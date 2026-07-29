@@ -94,10 +94,10 @@ class SubtitleService : Service() {
                     sourceLang = "en",
                     targetLang = "ko"
                 ).collectLatest { state ->
-                    Log.d(TAG, "수신된 자막: ${state.text} (final=${state.isFinal})")
+                    Log.d(TAG, "수신된 자막: ${state.finalizedLines}, partial=${state.partialText}")
 
                     withContext(Dispatchers.Main) {
-                        overlayController.updateText(state.text, state.isFinal)
+                        overlayController.updateText(state)
                     }
                 }
             } catch (e: Exception) {
