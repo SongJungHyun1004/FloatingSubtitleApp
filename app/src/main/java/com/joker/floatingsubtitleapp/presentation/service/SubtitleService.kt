@@ -11,12 +11,12 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import dagger.hilt.android.AndroidEntryPoint
-import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
-import javax.inject.Inject
 import com.joker.floatingsubtitleapp.domain.usecase.GetSubtitleFlowUseCase
+import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
+import com.joker.floatingsubtitleapp.presentation.overlay.SubtitleLineManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collectLatest
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class SubtitleService : Service() {
@@ -25,6 +25,9 @@ class SubtitleService : Service() {
 
     @Inject
     lateinit var getSubtitleFlowUseCase: GetSubtitleFlowUseCase
+
+    @Inject
+    lateinit var subtitleLineManager: SubtitleLineManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var captureJob: Job? = null
@@ -60,7 +63,7 @@ class SubtitleService : Service() {
         Log.d(TAG, "onStartCommand action: ${intent?.action}")
         when (intent?.action) {
             "START_CAPTURE" -> {
-                val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) // 기본값 RESULT_CANCELED(0)
+                val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
                 val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra("DATA", Intent::class.java)
                 } else {
@@ -68,7 +71,6 @@ class SubtitleService : Service() {
                     intent.getParcelableExtra<Intent>("DATA")
                 }
 
-                // ⭕ 수정: RESULT_OK (-1) 인지 정확히 검사
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     startSubtitlePipeline(resultCode, data)
                 } else {
@@ -81,9 +83,11 @@ class SubtitleService : Service() {
         }
         return START_STICKY
     }
+
     private fun startSubtitlePipeline(resultCode: Int, data: Intent) {
         Log.d(TAG, "startSubtitlePipeline 시작")
         captureJob?.cancel()
+        subtitleLineManager.clear()
         overlayController.show()
 
         captureJob = serviceScope.launch(Dispatchers.IO) {
@@ -93,15 +97,14 @@ class SubtitleService : Service() {
                     data = data,
                     sourceLang = "en",
                     targetLang = "ko"
-                ).collectLatest { state ->
-                    Log.d(TAG, "수신된 자막: ${state.finalizedLines}, partial=${state.partialText}")
-
-                    withContext(Dispatchers.Main) {
-                        overlayController.updateText(state)
-                    }
+                ).collect { event ->
+                    // collectLatest가 아니라 collect를 쓴다: onEvent 처리는
+                    // 즉시 끝나는 가벼운 작업이라 굳이 이전 이벤트 처리를 취소할
+                    // 이유가 없고, "번역 누락 없음" 요구사항과도 맞지 않는다.
+                    Log.d(TAG, "수신된 이벤트: $event")
+                    subtitleLineManager.onEvent(event)
                 }
             } catch (e: Exception) {
-                // 3. captureJob?.cancel() 호출 시 발생하는 취소 예외는 정상 처리
                 if (e is CancellationException) throw e
                 Log.e(TAG, "Subtitle pipeline 에러 발생: ${e.message}", e)
             }
@@ -113,6 +116,7 @@ class SubtitleService : Service() {
         captureJob?.cancel()
         getSubtitleFlowUseCase.stop()
         overlayController.hide()
+        subtitleLineManager.clear()
         serviceScope.cancel()
         super.onDestroy()
     }

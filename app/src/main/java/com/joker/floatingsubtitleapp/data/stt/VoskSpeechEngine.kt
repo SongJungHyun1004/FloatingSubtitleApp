@@ -69,7 +69,7 @@ class VoskSpeechEngine @Inject constructor(
                 if (recognizer.acceptWaveForm(buffer, buffer.size)) {
                     val resultJson = recognizer.result
                     val text = JSONObject(resultJson).optString("text", "")
-                    Log.d("Pipeline_2_STT", "Recognized text: $text")
+                    Log.d("VOSK_FINAL_RAW", text)
                     if (text.isNotBlank()) {
                         trySend(SpeechResult.Final(text))
                     }
