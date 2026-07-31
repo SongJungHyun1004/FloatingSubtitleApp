@@ -26,6 +26,8 @@ class VoskSpeechEngine @Inject constructor(
     private val modelManager: VoskModelManager
 ) : SpeechRecognitionRepository {
 
+    private val TAG = "VoskSpeechEngine"
+
     private var model: Model? = null
     private val sampleRate = 16000.0f
     // 다중 스레드에서 동시에 초기화되는 것을 방지하는 Mutex
@@ -71,13 +73,21 @@ class VoskSpeechEngine @Inject constructor(
                     val text = JSONObject(resultJson).optString("text", "")
                     Log.d("VOSK_FINAL_RAW", text)
                     if (text.isNotBlank()) {
-                        trySend(SpeechResult.Final(text))
+                        // Final은 절대 유실되면 안 되므로 trySend 실패를 반드시 로그로 남긴다.
+                        // (채널 버퍼가 꽉 차서 실패하면 지금까지는 조용히 사라졌었다)
+                        val sendResult = trySend(SpeechResult.Final(text))
+                        if (sendResult.isFailure) {
+                            Log.w(TAG, "⚠️ Final 전송 실패 - 채널 backpressure로 유실 가능성: [$text]")
+                        }
                     }
                 } else {
                     val partialJson = recognizer.partialResult
                     val partial = JSONObject(partialJson).optString("partial", "")
                     if (partial.isNotBlank()) {
-                        trySend(SpeechResult.Partial(partial))
+                        val sendResult = trySend(SpeechResult.Partial(partial))
+                        if (sendResult.isFailure) {
+                            Log.d(TAG, "Partial 전송 실패 (허용 가능한 수준의 유실): [$partial]")
+                        }
                     }
                 }
             }

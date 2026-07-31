@@ -8,10 +8,14 @@ import com.joker.floatingsubtitleapp.domain.model.SubtitleLine
 import com.joker.floatingsubtitleapp.domain.repository.AudioCaptureRepository
 import com.joker.floatingsubtitleapp.domain.repository.SpeechRecognitionRepository
 import com.joker.floatingsubtitleapp.domain.repository.TranslateRepository
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
@@ -22,8 +26,13 @@ class GetSubtitleFlowUseCase @Inject constructor(
 ) {
     private val TAG = "FlowTracker"
 
-    // Partial 전용 스로틀 간격. Final에는 절대 적용하지 않는다.
-    private val PARTIAL_THROTTLE_MS = 600L
+    // Partial 텍스트가 이 시간(ms) 동안 더 이상 늘어나지 않아야("안정됐다"고 판단)
+    // 그제서야 번역한다. 고정 간격(구 sample(600))이 아니라 "안정성" 기준으로 바꾼 이유:
+    // 문장이 아직 진행 중인 불완전한 조각을 매번 처음부터 재번역하면 MLKit이
+    // 원문에도 없는 반복을 만들어내는 경향이 있었다(로그 확인:
+    // "...each other"까지만 인식된 조각을 번역했더니 최종 번역보다 더 심하게
+    // "개인적인"이 4번 반복됨). 안정된 시점에만 번역하면 이런 심한 경우가 줄어든다.
+    private val PARTIAL_DEBOUNCE_MS = 500L
 
     /**
      * @param resultCode MediaProjection 승인 결과 코드
@@ -31,83 +40,84 @@ class GetSubtitleFlowUseCase @Inject constructor(
      * @param sourceLang 원본 언어 (예: "en")
      * @param targetLang 대상 언어 (예: "ko")
      */
+    @OptIn(FlowPreview::class)
     operator fun invoke(
         resultCode: Int,
         data: Intent,
         sourceLang: String,
         targetLang: String
-    ): Flow<SubtitleEvent> {
-        // 1. 오디오 캡처
-        val audioFlow = audioRepo.startCapture(resultCode, data)
+    ): Flow<SubtitleEvent> = channelFlow {
+        Log.d(TAG, "번역 모델 사전 점검 중... ($sourceLang -> $targetLang)")
+        translateRepo.downloadModelIfNeeded(sourceLang).onFailure { e ->
+            Log.e(TAG, "번역 모델 다운로드 실패($sourceLang): ${e.message}", e)
+        }
+        translateRepo.downloadModelIfNeeded(targetLang).onFailure { e ->
+            Log.e(TAG, "번역 모델 다운로드 실패($targetLang): ${e.message}", e)
+        }
 
-        // 2. STT 변환
+        val audioFlow = audioRepo.startCapture(resultCode, data)
         val textFlow = sttRepo.recognize(audioFlow)
             .onEach { Log.d(TAG, "STT 결과: [$it]") }
 
-        // 마지막으로 Partial을 내보낸 시각. Final이 오면 0으로 리셋되어
-        // 다음 발화의 첫 Partial은 스로틀 없이 바로 나간다.
-        var lastPartialEmitAt = 0L
+        // 가장 최근 Partial 텍스트. null이면 "지금은 표시할 미리보기 없음" 상태.
+        val latestPartialText = MutableStateFlow<String?>(null)
 
-        // 3. Partial/Final을 서로 다른 정책으로 번역 + 변환
-        return textFlow
-            .onStart {
-                Log.d(TAG, "번역 모델 사전 점검 중... ($sourceLang -> $targetLang)")
-                translateRepo.downloadModelIfNeeded(sourceLang).onFailure { e ->
-                    Log.e(TAG, "번역 모델 다운로드 실패($sourceLang): ${e.message}", e)
-                }
-                translateRepo.downloadModelIfNeeded(targetLang).onFailure { e ->
-                    Log.e(TAG, "번역 모델 다운로드 실패($targetLang): ${e.message}", e)
-                }
-            }
-            .transform { speechResult ->
-                when (speechResult) {
-                    is SpeechResult.Partial -> {
-                        // Partial은 실시간성이 목적이라 하나 건너뛰어도
-                        // 바로 다음 게 오므로 스로틀링 대상이다.
-                        val now = System.currentTimeMillis()
-                        if (now - lastPartialEmitAt < PARTIAL_THROTTLE_MS) return@transform
-                        lastPartialEmitAt = now
+        // Partial 전용 파이프라인: 텍스트가 안정된(=일정 시간 더 안 늘어난) 시점에만 번역.
+        // 이 launch는 channelFlow의 스코프에 속해서, 바깥 collect가 끝나거나
+        // 취소되면 같이 정리된다.
+        launch {
+            latestPartialText
+                .filterNotNull()
+                .debounce(PARTIAL_DEBOUNCE_MS)
+                .collect { text ->
+                    val translated = translateRepo.translate(text, sourceLang, targetLang)
+                        .getOrDefault(text)
 
-                        val translated = translateRepo
-                            .translate(speechResult.text, sourceLang, targetLang)
-                            .getOrDefault(speechResult.text)
-
-                        emit(SubtitleEvent.PartialUpdated(translated))
+                    // 번역하는 동안 더 새 Partial이 왔거나 Final로 확정되면서
+                    // 상태가 이미 바뀌었다면, 이 번역 결과는 낡은 것이므로 버린다.
+                    if (latestPartialText.value == text) {
+                        send(SubtitleEvent.PartialUpdated(translated))
                     }
+                }
+        }
 
-                    is SpeechResult.Final -> {
-                        // Final은 절대 스로틀링하거나 드롭하지 않는다.
-                        // "번역 누락 없음" 요구사항이 여기서 구조적으로 보장된다.
-                        Log.d(TAG, "번역 요청 시작(Final): ${speechResult.text}")
+        // Final 전용 파이프라인: 절대 디바운스/스킵/드롭하지 않고 즉시 처리한다.
+        textFlow.collect { speechResult ->
+            when (speechResult) {
+                is SpeechResult.Partial -> {
+                    latestPartialText.value = speechResult.text
+                }
 
-                        val translateResult = translateRepo
-                            .translate(speechResult.text, sourceLang, targetLang)
+                is SpeechResult.Final -> {
+                    Log.d(TAG, "번역 요청 시작(Final): ${speechResult.text}")
 
-                        translateResult.onFailure { e ->
-                            Log.e(TAG, "번역 실패 원인: ${e.message}", e)
-                        }
+                    val translateResult = translateRepo.translate(
+                        speechResult.text, sourceLang, targetLang
+                    )
+                    translateResult.onFailure { e ->
+                        Log.e(TAG, "번역 실패 원인: ${e.message}", e)
+                    }
+                    val translated = translateResult.getOrDefault(speechResult.text)
 
-                        val translated = translateResult.getOrDefault(speechResult.text)
-
-                        if (translated.isNotBlank()) {
-                            emit(
-                                SubtitleEvent.LineFinalized(
-                                    SubtitleLine(
-                                        id = UUID.randomUUID().toString(),
-                                        text = translated
-                                    )
+                    if (translated.isNotBlank()) {
+                        send(
+                            SubtitleEvent.LineFinalized(
+                                SubtitleLine(
+                                    id = UUID.randomUUID().toString(),
+                                    text = translated
                                 )
                             )
-                        }
-
-                        // Vosk는 Final을 낸 직후 내부 상태를 리셋하므로,
-                        // 화면에 남아있던 이전 partial 텍스트도 즉시 비워야
-                        // "방금 확정된 문장"이 partial 자리에 중복 표시되지 않는다.
-                        emit(SubtitleEvent.PartialUpdated(""))
-                        lastPartialEmitAt = 0L
+                        )
                     }
+
+                    // Final이 확정됐으니 대기 중이던 partial 번역은 의미가 없어졌다.
+                    // null로 바꿔서 (a) 화면의 partial 텍스트를 즉시 비우고
+                    // (b) 위 launch에서 뒤늦게 도착할 수 있는 낡은 번역 결과를 걸러낸다.
+                    latestPartialText.value = null
+                    send(SubtitleEvent.PartialUpdated(""))
                 }
             }
+        }
     }
 
     fun stop() {
