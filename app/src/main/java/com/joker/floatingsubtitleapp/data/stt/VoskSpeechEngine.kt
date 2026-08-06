@@ -65,6 +65,22 @@ class VoskSpeechEngine @Inject constructor(
 
         val recognizer = Recognizer(currentModel, sampleRate)
 
+        // Vosk의 기본 무음 임계값(대략 0.5~1.0초)이 빠른 대사(쉼이 짧은 구간)에서는
+        // 문장을 안 끊고 계속 이어붙이는 문제가 있어서 좀 더 예민하게 조정한다.
+        // (vosk-android 0.3.50+ 부터 지원되는 API. 0.3.47에는 없어서 0.3.75로 업그레이드 후 사용)
+        // 단위는 초(second)다.
+        //  - startSilenceMax(5.0s): 말이 시작되기 전 허용하는 무음 시간. 그대로 둔다.
+        //  - endSilence(0.3s): "뭔가 인식된 뒤" 이만큼 조용하면 문장이 끝났다고 판단.
+        //    기본값보다 낮춰서 짧은 쉼에도 좀 더 잘 끊기게 한다.
+        //    단, 너무 낮추면 한 문장 안의 자연스러운 쉼(쉼표 등)까지 끊어버릴 수 있으니
+        //    실제 사용해보면서 0.2~0.5 사이에서 값을 조정해봐야 한다.
+        //  - maxUtteranceLength(20.0s): 아무리 안 끊겨도 이 시간이 지나면 강제로 끊는다.
+        runCatching {
+            recognizer.setEndpointerDelays(5.0f, 0.2f, 20.0f)
+        }.onFailure { e ->
+            Log.w(TAG, "setEndpointerDelays 적용 실패: ${e.message}", e)
+        }
+
         // callbackFlow의 Scope를 사용하여 launch 실행
         val job = launch(Dispatchers.Default) {
             audioData.collect { buffer ->
@@ -73,8 +89,6 @@ class VoskSpeechEngine @Inject constructor(
                     val text = JSONObject(resultJson).optString("text", "")
                     Log.d("VOSK_FINAL_RAW", text)
                     if (text.isNotBlank()) {
-                        // Final은 절대 유실되면 안 되므로 trySend 실패를 반드시 로그로 남긴다.
-                        // (채널 버퍼가 꽉 차서 실패하면 지금까지는 조용히 사라졌었다)
                         val sendResult = trySend(SpeechResult.Final(text))
                         if (sendResult.isFailure) {
                             Log.w(TAG, "⚠️ Final 전송 실패 - 채널 backpressure로 유실 가능성: [$text]")
