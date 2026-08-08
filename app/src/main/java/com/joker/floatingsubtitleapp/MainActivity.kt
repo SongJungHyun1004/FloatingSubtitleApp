@@ -1,21 +1,20 @@
 package com.joker.floatingsubtitleapp
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import android.media.projection.MediaProjectionManager
-import android.content.Context
-import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,13 +25,25 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.joker.floatingsubtitleapp.presentation.service.SubtitleService
-import kotlin.collections.toTypedArray
+import com.joker.floatingsubtitleapp.presentation.settings.LanguageSelectionSection
+import com.joker.floatingsubtitleapp.presentation.settings.ModelDownloadStatus
+import com.joker.floatingsubtitleapp.presentation.settings.SettingsViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // 캡처 승인 결과가 돌아올 때(비동기) 어떤 언어로 시작할지 알아야 해서
+    // 버튼 클릭 시점의 선택값을 잠깐 들고 있는다.
+    private var pendingSourceLang: String = "en"
+    private var pendingTargetLang: String = "ko"
 
     // 1. Result Launcher 등록
     private val overlayPermissionLauncher = registerForActivityResult(
@@ -58,6 +69,8 @@ class MainActivity : ComponentActivity() {
                 action = "START_CAPTURE"
                 putExtra("RESULT_CODE", result.resultCode)
                 putExtra("DATA", result.data)
+                putExtra("SOURCE_LANG", pendingSourceLang)
+                putExtra("TARGET_LANG", pendingTargetLang)
             }
             startForegroundService(intent)
         }
@@ -72,7 +85,11 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
-                        onStart = { startAudioCaptureWithPermission() },
+                        onStart = { sourceLang, targetLang ->
+                            pendingSourceLang = sourceLang
+                            pendingTargetLang = targetLang
+                            startAudioCaptureWithPermission()
+                        },
                         onStop = { stopService(Intent(this, SubtitleService::class.java)) }
                     )
                 }
@@ -99,7 +116,15 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun MainScreen(onStart: () -> Unit, onStop: () -> Unit) {
+    fun MainScreen(
+        onStart: (sourceLang: String, targetLang: String) -> Unit,
+        onStop: () -> Unit,
+        settingsViewModel: SettingsViewModel = hiltViewModel()
+    ) {
+        val uiState by settingsViewModel.uiState.collectAsState()
+        val modelsReady = uiState.sourceStatus == ModelDownloadStatus.READY &&
+                uiState.targetStatus == ModelDownloadStatus.READY
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -108,10 +133,18 @@ class MainActivity : ComponentActivity() {
             verticalArrangement = Arrangement.Center
         ) {
             Text("Floating Subtitle Settings", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
-                Text("자막 서비스 시작")
+            LanguageSelectionSection(viewModel = settingsViewModel)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = { onStart(uiState.selected.sourceLang, uiState.selected.targetLang) },
+                enabled = modelsReady,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (modelsReady) "자막 서비스 시작" else "언어 모델 준비 중...")
             }
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
@@ -119,5 +152,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
 }

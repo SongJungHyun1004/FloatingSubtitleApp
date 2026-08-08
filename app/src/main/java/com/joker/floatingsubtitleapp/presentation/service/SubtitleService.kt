@@ -71,8 +71,13 @@ class SubtitleService : Service() {
                     intent.getParcelableExtra<Intent>("DATA")
                 }
 
+                // MainActivity에서 사용자가 고른 언어를 extra로 전달받는다.
+                // 값이 없으면(예: 예전 버전 Intent) en/ko로 안전하게 폴백한다.
+                val sourceLang = intent.getStringExtra("SOURCE_LANG") ?: "en"
+                val targetLang = intent.getStringExtra("TARGET_LANG") ?: "ko"
+
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    startSubtitlePipeline(resultCode, data)
+                    startSubtitlePipeline(resultCode, data, sourceLang, targetLang)
                 } else {
                     Log.e(TAG, "MediaProjection Intent data 또는 resultCode가 유효하지 않습니다. (resultCode: $resultCode, data: $data)")
                 }
@@ -84,8 +89,13 @@ class SubtitleService : Service() {
         return START_STICKY
     }
 
-    private fun startSubtitlePipeline(resultCode: Int, data: Intent) {
-        Log.d(TAG, "startSubtitlePipeline 시작")
+    private fun startSubtitlePipeline(
+        resultCode: Int,
+        data: Intent,
+        sourceLang: String,
+        targetLang: String
+    ) {
+        Log.d(TAG, "startSubtitlePipeline 시작 ($sourceLang -> $targetLang)")
         captureJob?.cancel()
         subtitleLineManager.clear()
         overlayController.show()
@@ -95,8 +105,8 @@ class SubtitleService : Service() {
                 getSubtitleFlowUseCase(
                     resultCode = resultCode,
                     data = data,
-                    sourceLang = "en",
-                    targetLang = "ko"
+                    sourceLang = sourceLang,
+                    targetLang = targetLang
                 ).collect { event ->
                     // collectLatest가 아니라 collect를 쓴다: onEvent 처리는
                     // 즉시 끝나는 가벼운 작업이라 굳이 이전 이벤트 처리를 취소할
