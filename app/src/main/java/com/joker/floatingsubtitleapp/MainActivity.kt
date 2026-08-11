@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
         settingsViewModel: SettingsViewModel = hiltViewModel()
     ) {
         val uiState by settingsViewModel.uiState.collectAsState()
-        val modelsReady = uiState.sourceStatus == ModelDownloadStatus.READY &&
+        val modelsReady = uiState.sourceStatus is com.joker.floatingsubtitleapp.presentation.settings.SttModelStatus.Ready &&
                 uiState.targetStatus == ModelDownloadStatus.READY
 
         Column(

@@ -56,7 +56,7 @@ class GetSubtitleFlowUseCase @Inject constructor(
         }
 
         val audioFlow = audioRepo.startCapture(resultCode, data)
-        val textFlow = sttRepo.recognize(audioFlow)
+        val textFlow = sttRepo.recognize(audioFlow, sourceLang)
             .onEach { Log.d(TAG, "STT 결과: [$it]") }
 
         // 가장 최근 Partial 텍스트. null이면 "지금은 표시할 미리보기 없음" 상태.

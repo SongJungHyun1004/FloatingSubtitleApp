@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.joker.floatingsubtitleapp.data.stt.VoskModels
 
 @Composable
 fun LanguageSelectionSection(viewModel: SettingsViewModel) {
@@ -26,17 +29,41 @@ fun LanguageSelectionSection(viewModel: SettingsViewModel) {
         LanguageDropdown(
             label = "원본 언어 (듣는 언어)",
             selectedCode = uiState.selected.sourceLang,
-            status = uiState.sourceStatus,
+            options = SupportedLanguages.sttSupported,
+            statusLabel = sttStatusLabel(uiState.sourceStatus),
             onSelect = viewModel::selectSourceLang
         )
         Column(modifier = Modifier.padding(top = 12.dp)) {
             LanguageDropdown(
                 label = "번역 언어 (보여줄 언어)",
                 selectedCode = uiState.selected.targetLang,
-                status = uiState.targetStatus,
+                options = SupportedLanguages.all,
+                statusLabel = statusLabel(uiState.targetStatus),
                 onSelect = viewModel::selectTargetLang
             )
         }
+    }
+
+    val pendingCode = uiState.pendingCellularConfirmLangCode
+    if (pendingCode != null) {
+        val info = VoskModels.infoFor(pendingCode)
+        AlertDialog(
+            onDismissRequest = viewModel::cancelCellularDownload,
+            title = { Text("이동통신 데이터로 다운로드") },
+            text = {
+                Text(
+                    "${SupportedLanguages.displayNameOf(pendingCode)} 음성인식 모델은 " +
+                            "약 ${info?.approxSizeMb ?: "?"}MB입니다. Wi-Fi가 아닌 상태인데 " +
+                            "계속 받으시겠어요?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmCellularDownload) { Text("계속") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelCellularDownload) { Text("취소") }
+            }
+        )
     }
 }
 
@@ -44,7 +71,8 @@ fun LanguageSelectionSection(viewModel: SettingsViewModel) {
 private fun LanguageDropdown(
     label: String,
     selectedCode: String,
-    status: ModelDownloadStatus,
+    options: List<SupportedLanguage>,
+    statusLabel: String,
     onSelect: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -64,7 +92,7 @@ private fun LanguageDropdown(
                 expanded = expanded,
                 onDismissRequest = { expanded = false }
             ) {
-                SupportedLanguages.all.forEach { lang ->
+                options.forEach { lang ->
                     DropdownMenuItem(
                         text = { Text(lang.displayName) },
                         onClick = {
@@ -77,7 +105,7 @@ private fun LanguageDropdown(
         }
 
         Text(
-            text = statusLabel(status),
+            text = statusLabel,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 2.dp)
         )
@@ -89,4 +117,13 @@ private fun statusLabel(status: ModelDownloadStatus): String = when (status) {
     ModelDownloadStatus.DOWNLOADING -> "⏳ 모델 다운로드 중..."
     ModelDownloadStatus.READY -> "✅ 사용 가능"
     ModelDownloadStatus.FAILED -> "⚠️ 다운로드 실패 - 다시 선택하면 재시도합니다"
+}
+
+private fun sttStatusLabel(status: SttModelStatus): String = when (status) {
+    is SttModelStatus.Idle -> ""
+    is SttModelStatus.Downloading ->
+        if (status.fraction >= 0f) "⏳ 다운로드 중... ${(status.fraction * 100).toInt()}%"
+        else "⏳ 처리 중..."
+    is SttModelStatus.Ready -> "✅ 사용 가능"
+    is SttModelStatus.Failed -> "⚠️ 실패: ${status.message}"
 }
