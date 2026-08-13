@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -28,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.joker.floatingsubtitleapp.domain.model.SubtitleUiState
@@ -37,6 +39,7 @@ fun SubtitleOverlay(
     state: SubtitleUiState,
     isLocked: Boolean,
     isMinimized: Boolean,
+    fixedSize: DpSize?,
     onDrag: (Float, Float) -> Unit,
     onResize: (Float, Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -49,11 +52,16 @@ fun SubtitleOverlay(
         return
     }
 
-    Box {
+    // 리사이즈 전(fixedSize == null)에는 내용에 맞춰 자동 크기.
+    // 리사이즈를 시작한 뒤(fixedSize != null)에는 실제 창 크기를 그대로 따라야
+    // 리사이즈 핸들이 눈에 보이는 박스 경계와 같이 움직인다.
+    val outerModifier = if (fixedSize != null) Modifier.size(fixedSize) else Modifier.wrapContentSize()
+    val columnSizeModifier = if (fixedSize != null) Modifier.fillMaxSize() else Modifier.wrapContentSize()
+
+    Box(modifier = outerModifier) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .wrapContentSize()
+            modifier = columnSizeModifier
                 .pointerInput(isLocked) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
