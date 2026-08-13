@@ -100,8 +100,18 @@ class VoskSpeechEngine @Inject constructor(
         }
 
         awaitClose {
+            // job.cancel()은 취소를 "요청"만 할 뿐, acceptWaveForm() 같은 네이티브
+            // 호출이 이미 실행 중이면 그게 끝날 때까지 즉시 멈추지 않는다.
+            // 그 상태에서 recognizer.close()를 바로 부르면 다른 스레드가 아직
+            // 쓰고 있는 네이티브 메모리를 해제해버려 SIGSEGV가 날 수 있다.
+            // invokeOnCompletion으로 "이 job이 실제로 완전히 끝난 뒤"에만
+            // close()가 실행되도록 순서를 강제한다.
+            job.invokeOnCompletion {
+                runCatching { recognizer.close() }.onFailure { e ->
+                    Log.w(TAG, "recognizer.close() 실패: ${e.message}", e)
+                }
+            }
             job.cancel()
-            recognizer.close()
         }
     }
 }

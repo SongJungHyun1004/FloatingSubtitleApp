@@ -46,10 +46,19 @@ class OverlayController @Inject constructor(
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
 
-    override val viewModelStore: ViewModelStore = ViewModelStore()
-    override val lifecycle: LifecycleRegistry = LifecycleRegistry(this)
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    override val savedStateRegistry = savedStateRegistryController.savedStateRegistry
+    // Lifecycle은 한 번 DESTROYED가 되면 같은 인스턴스로는 다시 살릴 수 없다
+    // (Android의 정책). OverlayController 자체는 @Singleton이라 앱 프로세스
+    // 동안 계속 살아있지만, 그 안의 Lifecycle/ViewModelStore/SavedStateRegistry는
+    // show()가 다시 호출될 때마다 "이번 표시 세션"용으로 새로 만든다.
+    // (예전 버전은 이 3개를 생성자에서 val로 한 번만 만들어서, 종료 후 재시작하면
+    // 오버레이가 안 뜨는 버그가 있었다.)
+    override var viewModelStore: ViewModelStore = ViewModelStore()
+        private set
+    override var lifecycle: LifecycleRegistry = LifecycleRegistry(this)
+        private set
+    private var savedStateRegistryController = SavedStateRegistryController.create(this)
+    override var savedStateRegistry = savedStateRegistryController.savedStateRegistry
+        private set
 
     // 잠금/최소화는 순수 오버레이 UI 상태라 SubtitleLineManager(자막 데이터)와
     // 무관하게 여기서 직접 들고 있는다. mutableStateOf라 Compose가 변화를 관찰한다.
@@ -76,6 +85,12 @@ class OverlayController @Inject constructor(
             Log.d(TAG, "ComposeView가 이미 생성되어 있습니다.")
             return
         }
+
+        // 이번 표시 세션을 위한 새 Lifecycle 3종 생성 (위 주석 참고)
+        viewModelStore = ViewModelStore()
+        lifecycle = LifecycleRegistry(this)
+        savedStateRegistryController = SavedStateRegistryController.create(this)
+        savedStateRegistry = savedStateRegistryController.savedStateRegistry
 
         try {
             // ⭕ SavedStateRegistry는 Lifecycle Event 전환 전에 Restore 되어야 함
