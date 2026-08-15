@@ -1,28 +1,27 @@
 package com.joker.floatingsubtitleapp.presentation.overlay
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,7 +38,7 @@ fun SubtitleOverlay(
     state: SubtitleUiState,
     isLocked: Boolean,
     isMinimized: Boolean,
-    fixedSize: DpSize?,
+    fixedSize: DpSize,
     onDrag: (Float, Float) -> Unit,
     onResize: (Float, Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -52,22 +51,18 @@ fun SubtitleOverlay(
         return
     }
 
-    // 리사이즈 전(fixedSize == null)에는 내용에 맞춰 자동 크기.
-    // 리사이즈를 시작한 뒤(fixedSize != null)에는 실제 창 크기를 그대로 따라야
-    // 리사이즈 핸들이 눈에 보이는 박스 경계와 같이 움직인다.
-    val outerModifier = if (fixedSize != null) Modifier.size(fixedSize) else Modifier.wrapContentSize()
-    val columnSizeModifier = if (fixedSize != null) Modifier.fillMaxSize() else Modifier.wrapContentSize()
-
-    Box(modifier = outerModifier) {
+    Box(modifier = Modifier.size(fixedSize)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = columnSizeModifier
+            modifier = Modifier
+                .fillMaxSize()
                 .pointerInput(isLocked) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
                         if (!isLocked) onDrag(dragAmount.x, dragAmount.y)
                     }
                 }
+                .clip(RoundedCornerShape(8.dp))
                 .background(
                     color = Color.Black.copy(alpha = 0.6f),
                     shape = RoundedCornerShape(8.dp)
@@ -82,25 +77,36 @@ fun SubtitleOverlay(
                 onStopService = onStopService
             )
 
-            // 각 줄을 고유 id로 key() 처리 -> 리스트 전체가 아니라
-            // "이 줄 하나"에 대해서만 등장/퇴장 애니메이션이 걸린다.
-            state.finalizedLines.forEach { line ->
-                key(line.id) {
-                    val visibleState = remember { MutableTransitionState(false) }
-                    visibleState.targetState = !line.isExiting
+            val listState = rememberLazyListState()
 
-                    AnimatedVisibility(
-                        visibleState = visibleState,
-                        enter = fadeIn() + slideInVertically { fullHeight -> fullHeight / 3 },
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        Text(
-                            text = line.text,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                    }
+            // 새 확정 줄이 추가될 때마다 부드럽게 최신 위치로 스크롤한다.
+            // animateScrollToItem은 내부 애니메이션 속도를 조절할 수 없어서
+            // 대신 animateScrollBy + tween으로 "항상 일정한 시간(400ms) 동안
+            // 부드럽게" 움직이게 한다. value를 넉넉히 크게 주면 실제 남은
+            // 스크롤 거리에서 자동으로 멈춰서, 매번 정확히 맨 아래까지 간다.
+            LaunchedEffect(state.finalizedLines.size) {
+                if (state.finalizedLines.isNotEmpty()) {
+                    listState.animateScrollBy(
+                        value = 10_000f,
+                        animationSpec = tween(durationMillis = 400)
+                    )
+                }
+            }
+
+            LazyColumn(
+                state = listState,
+                horizontalAlignment = Alignment.Start,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                items(state.finalizedLines, key = { it.id }) { line ->
+                    Text(
+                        text = line.text,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
                 }
             }
 
@@ -108,7 +114,8 @@ fun SubtitleOverlay(
                 Text(
                     text = state.partialText,
                     color = Color.LightGray,
-                    fontSize = 18.sp
+                    fontSize = 18.sp,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

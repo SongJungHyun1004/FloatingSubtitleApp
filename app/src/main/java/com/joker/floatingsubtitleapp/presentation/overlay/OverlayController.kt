@@ -3,6 +3,8 @@ package com.joker.floatingsubtitleapp.presentation.overlay
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Point
+import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -43,6 +45,12 @@ class OverlayController @Inject constructor(
         private const val TAG = "OverlayController"
         private const val MIN_WIDTH_DP = 200
         private const val MIN_HEIGHT_DP = 100
+        // 창의 "기본" 크기. WRAP_CONTENT를 쓰지 않고 항상 이 크기(또는 사용자가
+        // 리사이즈한 크기)로 고정한다 - 자막 길이가 바뀔 때마다 창이 같이
+        // 흔들리는 걸 막기 위함. 내용이 이 크기를 넘으면 LazyColumn이 자동
+        // 스크롤해서 오래된 줄이 위로 밀려 나간다(잘리는 게 아니라 스크롤됨).
+        private const val DEFAULT_WIDTH_DP = 260
+        private const val DEFAULT_HEIGHT_DP = 120
     }
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -52,8 +60,6 @@ class OverlayController @Inject constructor(
     // (Android의 정책). OverlayController 자체는 @Singleton이라 앱 프로세스
     // 동안 계속 살아있지만, 그 안의 Lifecycle/ViewModelStore/SavedStateRegistry는
     // show()가 다시 호출될 때마다 "이번 표시 세션"용으로 새로 만든다.
-    // (예전 버전은 이 3개를 생성자에서 val로 한 번만 만들어서, 종료 후 재시작하면
-    // 오버레이가 안 뜨는 버그가 있었다.)
     override var viewModelStore: ViewModelStore = ViewModelStore()
         private set
     override var lifecycle: LifecycleRegistry = LifecycleRegistry(this)
@@ -66,21 +72,29 @@ class OverlayController @Inject constructor(
     // 무관하게 여기서 직접 들고 있는다. mutableStateOf라 Compose가 변화를 관찰한다.
     private val isLockedState = mutableStateOf(false)
     private val isMinimizedState = mutableStateOf(false)
-    // 리사이즈 전(WRAP_CONTENT)에는 null -> Compose가 내용에 맞춰 자동 크기.
-    // 리사이즈를 시작하면 실제 창 크기(dp)를 넣어줘서, Compose 쪽 내용물도
-    // 그 크기에 정확히 맞춰지도록 한다. (전에는 WindowManager 크기만 바뀌고
-    // Compose 내용물은 여전히 자기 콘텐츠 크기로만 그려져서 리사이즈 핸들이
-    // 따로 노는 것처럼 보였다.)
-    private val windowSizeState = mutableStateOf<DpSize?>(null)
 
     private val density = context.resources.displayMetrics.density
     private val minWidthPx = (MIN_WIDTH_DP * density).toInt()
     private val minHeightPx = (MIN_HEIGHT_DP * density).toInt()
-    private val screenWidthPx = context.resources.displayMetrics.widthPixels
+    private val defaultWidthPx = (DEFAULT_WIDTH_DP * density).toInt()
+    private val defaultHeightPx = (DEFAULT_HEIGHT_DP * density).toInt()
+    // Application Context의 resources.displayMetrics.widthPixels는 실제 화면
+    // 크기와 어긋나는 경우가 있어서(오버레이처럼 특정 디스플레이에 안 묶인
+    // 컨텍스트에서 특히), WindowManager가 실제로 알고 있는 크기를 대신 쓴다.
+    private val screenWidthPx: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        windowManager.currentWindowMetrics.bounds.width()
+    } else {
+        @Suppress("DEPRECATION")
+        Point().also { windowManager.defaultDisplay.getRealSize(it) }.x
+    }
+
+    // 창은 항상 고정 크기라, Compose 쪽도 항상 구체적인 크기를 갖고 시작한다
+    // (더 이상 null=WRAP_CONTENT 같은 특수 상태가 없다).
+    private val windowSizeState = mutableStateOf(DpSize(DEFAULT_WIDTH_DP.dp, DEFAULT_HEIGHT_DP.dp))
 
     private val params = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
+        defaultWidthPx,
+        defaultHeightPx,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
         PixelFormat.TRANSLUCENT
@@ -92,9 +106,10 @@ class OverlayController @Inject constructor(
         // 폭이 늘어나도 왼쪽은 자동으로 고정되고 오른쪽만 늘어나서 x를
         // 리사이즈 중에 전혀 건드릴 필요가 없다.
         gravity = Gravity.TOP or Gravity.START
-        // 초기 위치는 대략 화면 가운데 근처에 오도록 추정 배치한다
-        // (WRAP_CONTENT라 정확한 초기 폭은 알 수 없어서 최소 폭 기준으로 근사).
-        x = (screenWidthPx - minWidthPx) / 2
+        // 이제 초기 크기(defaultWidthPx)를 정확히 알기 때문에, 화면 중앙에
+        // 오도록 x를 정확하게 계산할 수 있다 (예전엔 WRAP_CONTENT라 실제
+        // 크기를 몰라서 최소 크기로 대충 추정했었다).
+        x = (screenWidthPx - defaultWidthPx) / 2
         y = 100
     }
 
@@ -138,7 +153,7 @@ class OverlayController @Inject constructor(
                         onToggleLock = { isLockedState.value = !isLockedState.value },
                         onToggleMinimize = {
                             isMinimizedState.value = !isMinimizedState.value
-                            resetSizeToWrapContent()
+                            resetSizeToDefault()
                         },
                         onReturnToApp = { returnToApp() },
                         onStopService = { stopService() }
@@ -162,13 +177,8 @@ class OverlayController @Inject constructor(
 
     private fun updateSize(dw: Float, dh: Float) {
         composeView?.let { view ->
-            // 처음 리사이즈를 시작하는 순간, WRAP_CONTENT(음수값)였던 크기를
-            // 지금 실제 보이는 픽셀 크기로 고정한 뒤부터 드래그만큼 더한다.
-            val currentWidth = if (params.width <= 0) view.width else params.width
-            val currentHeight = if (params.height <= 0) view.height else params.height
-
-            val newWidthPx = (currentWidth + dw.toInt()).coerceAtLeast(minWidthPx)
-            val newHeightPx = (currentHeight + dh.toInt()).coerceAtLeast(minHeightPx)
+            val newWidthPx = (params.width + dw.toInt()).coerceAtLeast(minWidthPx)
+            val newHeightPx = (params.height + dh.toInt()).coerceAtLeast(minHeightPx)
 
             // gravity가 START(왼쪽 기준)라, 폭만 키우면 왼쪽 가장자리는 자동으로
             // 고정되고 오른쪽으로만 늘어난다 - x를 따로 건드릴 필요가 없다.
@@ -176,18 +186,16 @@ class OverlayController @Inject constructor(
             params.height = newHeightPx
             windowManager.updateViewLayout(view, params)
 
-            // Compose 쪽 내용물도 이 크기를 정확히 알아야 리사이즈 핸들이
-            // 실제 창 경계와 같이 움직인다.
             windowSizeState.value = DpSize((newWidthPx / density).dp, (newHeightPx / density).dp)
         }
     }
 
-    private fun resetSizeToWrapContent() {
+    private fun resetSizeToDefault() {
         composeView?.let { view ->
-            params.width = WindowManager.LayoutParams.WRAP_CONTENT
-            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+            params.width = defaultWidthPx
+            params.height = defaultHeightPx
             windowManager.updateViewLayout(view, params)
-            windowSizeState.value = null
+            windowSizeState.value = DpSize(DEFAULT_WIDTH_DP.dp, DEFAULT_HEIGHT_DP.dp)
         }
     }
 
