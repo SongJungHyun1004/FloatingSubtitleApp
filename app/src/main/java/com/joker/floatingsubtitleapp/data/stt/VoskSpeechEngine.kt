@@ -33,7 +33,12 @@ class VoskSpeechEngine @Inject constructor(
 
     private suspend fun getOrLoadModel(langCode: String): Model {
         modelLoadLock.withLock {
-            loadedModels[langCode]?.let { return it }
+            Log.d(TAG, "🔍 getOrLoadModel 요청: langCode=$langCode, 현재 캐시=${loadedModels.keys}")
+
+            loadedModels[langCode]?.let {
+                Log.d(TAG, "🔍 캐시 히트: langCode=$langCode, model=${System.identityHashCode(it)}")
+                return it
+            }
 
             var finalPath: String? = null
             modelManager.prepareModel(langCode).collect { progress ->
@@ -44,9 +49,11 @@ class VoskSpeechEngine @Inject constructor(
                 // SettingsViewModel이 VoskModelManager를 직접 구독해서 따로 보여준다.
             }
             val path = finalPath ?: error("모델 경로를 가져오지 못했습니다 ($langCode)")
+            Log.d(TAG, "🔍 캐시 미스, 새로 로드: langCode=$langCode, path=$path")
 
             val model = Model(path)
             loadedModels[langCode] = model
+            Log.d(TAG, "🔍 로드 완료: langCode=$langCode, model=${System.identityHashCode(model)}")
             return model
         }
     }
@@ -57,6 +64,8 @@ class VoskSpeechEngine @Inject constructor(
     }
 
     override fun recognize(audioData: Flow<ShortArray>, sourceLang: String): Flow<SpeechResult> = callbackFlow {
+        Log.d(TAG, "🔍 recognize() 호출됨: sourceLang=$sourceLang")
+
         val model = try {
             getOrLoadModel(sourceLang)
         } catch (e: Exception) {
@@ -64,6 +73,7 @@ class VoskSpeechEngine @Inject constructor(
             return@callbackFlow
         }
 
+        Log.d(TAG, "🔍 Recognizer 생성: sourceLang=$sourceLang, model=${System.identityHashCode(model)}")
         val recognizer = Recognizer(model, sampleRate)
 
         // 문장이 덜 완성된 상태에서 재번역되며 생기던 심한 반복 문제 완화를 위한 조정.

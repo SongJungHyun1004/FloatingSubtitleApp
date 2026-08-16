@@ -73,7 +73,7 @@ class VoskModelManager @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     private suspend fun unpackBundledEnglishModel(): String = withContext(Dispatchers.IO) {
-        suspendCancellableCoroutine { continuation ->
+        val basePath = suspendCancellableCoroutine { continuation ->
             StorageService.unpack(
                 context,
                 "model",
@@ -90,6 +90,11 @@ class VoskModelManager @Inject constructor(
                 }
             )
         }
+
+        // 예전 버전에 있었다가 언어별 다운로드 기능을 추가하며 빠졌던 보정.
+        // 번들 zip 구조에 따라 실제 모델 파일이 "vosk-model/model/" 처럼 한 단계
+        // 더 안쪽에 있는 경우가 있어서, 그 하위 폴더가 있으면 그걸 실제 경로로 쓴다.
+        File(basePath, "model").takeIf { it.exists() }?.absolutePath ?: basePath
     }
 
     // Vosk zip은 보통 "vosk-model-small-xx-0.xx/" 하위 폴더 하나를 포함한다.
