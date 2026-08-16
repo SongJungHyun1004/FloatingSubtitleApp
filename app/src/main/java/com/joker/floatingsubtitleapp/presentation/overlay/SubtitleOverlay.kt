@@ -18,6 +18,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -148,20 +157,29 @@ private fun ControlRow(
     onStopService: () -> Unit
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
-        modifier = Modifier.wrapContentSize()
+        horizontalArrangement = Arrangement.End,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        OverlayIconButton(symbol = "🔽", onClick = onToggleMinimize)
-        OverlayIconButton(symbol = if (isLocked) "🔒" else "🔓", onClick = onToggleLock)
-        OverlayIconButton(symbol = "🏠", onClick = onReturnToApp)
-        OverlayIconButton(symbol = "✕", onClick = onStopService)
+        OverlayIconButton(icon = Icons.Default.KeyboardArrowDown, contentDescription = "최소화", onClick = onToggleMinimize)
+        OverlayIconButton(
+            icon = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+            contentDescription = "위치 고정",
+            onClick = onToggleLock
+        )
+        OverlayIconButton(icon = Icons.Default.Home, contentDescription = "앱으로 돌아가기", onClick = onReturnToApp)
+        OverlayIconButton(icon = Icons.Default.Close, contentDescription = "서비스 종료", onClick = onStopService)
     }
 }
 
 @Composable
-private fun OverlayIconButton(symbol: String, onClick: () -> Unit) {
+private fun OverlayIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
-        Text(text = symbol, fontSize = 14.sp, color = Color.White)
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -174,7 +192,12 @@ private fun MinimizedBar(onRestore: () -> Unit) {
             .background(Color.Black.copy(alpha = 0.6f))
     ) {
         IconButton(onClick = onRestore, modifier = Modifier.size(32.dp)) {
-            Text(text = "🔼", fontSize = 14.sp, color = Color.White)
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "복원",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
