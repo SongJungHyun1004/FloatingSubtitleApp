@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.joker.floatingsubtitleapp.presentation.main.MainViewModel
 import com.joker.floatingsubtitleapp.presentation.service.SubtitleService
 import com.joker.floatingsubtitleapp.presentation.settings.LanguageSelectionSection
 import com.joker.floatingsubtitleapp.presentation.settings.ModelDownloadStatus
@@ -119,11 +120,18 @@ class MainActivity : ComponentActivity() {
     fun MainScreen(
         onStart: (sourceLang: String, targetLang: String) -> Unit,
         onStop: () -> Unit,
-        settingsViewModel: SettingsViewModel = hiltViewModel()
+        settingsViewModel: SettingsViewModel = hiltViewModel(),
+        mainViewModel: MainViewModel = hiltViewModel()
     ) {
         val uiState by settingsViewModel.uiState.collectAsState()
+        val mainUiState by mainViewModel.uiState.collectAsState()
         val modelsReady = uiState.sourceStatus is com.joker.floatingsubtitleapp.presentation.settings.SttModelStatus.Ready &&
                 uiState.targetStatus == ModelDownloadStatus.READY
+
+        // 서비스가 이미 실행 중이면 시작 버튼을 막는다 - 언어를 바꾼 채로
+        // 다시 시작을 눌러서 이전 세션과 겹치는 걸 UI 단에서부터 방지한다.
+        // 새 언어를 적용하려면 먼저 명시적으로 중지해야 한다.
+        val startEnabled = modelsReady && !mainUiState.isServiceRunning
 
         Column(
             modifier = Modifier
@@ -137,14 +145,28 @@ class MainActivity : ComponentActivity() {
 
             LanguageSelectionSection(viewModel = settingsViewModel)
 
+            if (mainUiState.languageChangedWhileRunning) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "⚠️ 언어가 바뀌었어요 - 재시작하면 적용됩니다",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { onStart(uiState.selected.sourceLang, uiState.selected.targetLang) },
-                enabled = modelsReady,
+                enabled = startEnabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (modelsReady) "자막 서비스 시작" else "언어 모델 준비 중...")
+                val label = when {
+                    mainUiState.isServiceRunning -> "실행 중 - 먼저 중지하세요"
+                    !modelsReady -> "언어 모델 준비 중..."
+                    else -> "자막 서비스 시작"
+                }
+                Text(label)
             }
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {

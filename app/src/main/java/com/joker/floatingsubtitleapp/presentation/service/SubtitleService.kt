@@ -29,6 +29,9 @@ class SubtitleService : Service() {
     @Inject
     lateinit var subtitleLineManager: SubtitleLineManager
 
+    @Inject
+    lateinit var serviceStateHolder: ServiceStateHolder
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var captureJob: Job? = null
 
@@ -96,11 +99,18 @@ class SubtitleService : Service() {
         targetLang: String
     ) {
         Log.d(TAG, "startSubtitlePipeline 시작 ($sourceLang -> $targetLang)")
-        captureJob?.cancel()
+        val previousJob = captureJob
         subtitleLineManager.clear()
         overlayController.show()
+        serviceStateHolder.setRunning(sourceLang, targetLang)
 
         captureJob = serviceScope.launch(Dispatchers.IO) {
+            // cancel()만 하고 완료를 기다리지 않으면, 이전 세션(이전 언어의
+            // 오디오 캡처 + Vosk 인식)과 새 세션이 아주 짧은 순간 동시에
+            // 살아있는 경쟁 상태가 생긴다. cancelAndJoin()으로 이전 세션이
+            // 실제로 완전히 끝난 뒤에만 새 세션을 시작하도록 강제한다.
+            previousJob?.cancelAndJoin()
+
             try {
                 getSubtitleFlowUseCase(
                     resultCode = resultCode,
@@ -127,6 +137,7 @@ class SubtitleService : Service() {
         getSubtitleFlowUseCase.stop()
         overlayController.hide()
         subtitleLineManager.clear()
+        serviceStateHolder.setStopped()
         serviceScope.cancel()
         super.onDestroy()
     }
