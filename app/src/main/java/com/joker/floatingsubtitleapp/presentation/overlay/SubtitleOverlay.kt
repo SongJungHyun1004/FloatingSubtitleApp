@@ -19,12 +19,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloseFullscreen
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -160,14 +160,17 @@ private fun ControlRow(
         horizontalArrangement = Arrangement.End,
         modifier = Modifier.fillMaxWidth()
     ) {
-        OverlayIconButton(icon = Icons.Default.KeyboardArrowDown, contentDescription = "최소화", onClick = onToggleMinimize)
+        // 윈도우 창의 "최소화"가 아니라 "창 크기를 줄인다/키운다"는 느낌을
+        // 주려고 확대/축소 계열 아이콘을 쓴다 (CloseFullscreen = 축소,
+        // OpenInFull = 확대). 복원 버튼(MinimizedBar)과 짝을 이룬다.
+        OverlayIconButton(icon = Icons.Default.CloseFullscreen, contentDescription = "최소화", onClick = onToggleMinimize)
         OverlayIconButton(
             icon = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
             contentDescription = "위치 고정",
             onClick = onToggleLock
         )
         OverlayIconButton(icon = Icons.Default.Home, contentDescription = "앱으로 돌아가기", onClick = onReturnToApp)
-        OverlayIconButton(icon = Icons.Default.Close, contentDescription = "서비스 종료", onClick = onStopService)
+        OverlayIconButton(icon = Icons.Default.PowerSettingsNew, contentDescription = "서비스 종료", onClick = onStopService)
     }
 }
 
@@ -193,10 +196,10 @@ private fun MinimizedBar(onRestore: () -> Unit) {
     ) {
         IconButton(onClick = onRestore, modifier = Modifier.size(32.dp)) {
             Icon(
-                imageVector = Icons.Default.KeyboardArrowUp,
+                imageVector = Icons.Default.OpenInFull,
                 contentDescription = "복원",
                 tint = Color.White,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }
