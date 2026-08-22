@@ -30,7 +30,12 @@ class SubtitleLineManager @Inject constructor() {
     fun onEvent(event: SubtitleEvent) {
         when (event) {
             is SubtitleEvent.PartialUpdated -> {
-                _uiState.update { it.copy(partialText = event.text) }
+                _uiState.update {
+                    it.copy(
+                        partialText = event.text,
+                        partialOriginalText = event.originalText
+                    )
+                }
             }
             is SubtitleEvent.LineFinalized -> {
                 _uiState.update { it.copy(finalizedLines = it.finalizedLines + event.line) }
