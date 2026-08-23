@@ -24,6 +24,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.joker.floatingsubtitleapp.MainActivity
+import com.joker.floatingsubtitleapp.domain.repository.DisplayPreferenceRepository
 import com.joker.floatingsubtitleapp.presentation.service.SubtitleService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -38,7 +39,8 @@ import javax.inject.Singleton
 @Singleton
 class OverlayController @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val subtitleLineManager: SubtitleLineManager
+    private val subtitleLineManager: SubtitleLineManager,
+    private val displayPreferenceRepository: DisplayPreferenceRepository
 ) : ViewModelStoreOwner, SavedStateRegistryOwner {
 
     companion object {
@@ -142,12 +144,14 @@ class OverlayController @Inject constructor(
                     val isLocked by isLockedState
                     val isMinimized by isMinimizedState
                     val windowSize by windowSizeState
+                    val showOriginalText by displayPreferenceRepository.showOriginalText.collectAsState()
 
                     SubtitleOverlay(
                         state = uiState,
                         isLocked = isLocked,
                         isMinimized = isMinimized,
                         fixedSize = windowSize,
+                        showOriginalText = showOriginalText,
                         onDrag = { dx, dy -> if (!isLocked) updatePosition(dx, dy) },
                         onResize = { dx, dy -> updateSize(dx, dy) },
                         onToggleLock = { isLockedState.value = !isLockedState.value },

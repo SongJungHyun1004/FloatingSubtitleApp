@@ -8,6 +8,7 @@ import com.joker.floatingsubtitleapp.data.stt.NetworkUtils
 import com.joker.floatingsubtitleapp.data.stt.VoskModelManager
 import com.joker.floatingsubtitleapp.data.stt.VoskModels
 import com.joker.floatingsubtitleapp.domain.model.SelectedLanguages
+import com.joker.floatingsubtitleapp.domain.repository.DisplayPreferenceRepository
 import com.joker.floatingsubtitleapp.domain.repository.LanguagePreferenceRepository
 import com.joker.floatingsubtitleapp.domain.repository.TranslateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,7 +37,8 @@ data class SettingsUiState(
     val sourceStatus: SttModelStatus = SttModelStatus.Idle,
     val targetStatus: ModelDownloadStatus = ModelDownloadStatus.IDLE,
     /** null이 아니면 "이동통신에서 큰 모델을 받아도 되는지" 확인 다이얼로그를 띄워야 함 */
-    val pendingCellularConfirmLangCode: String? = null
+    val pendingCellularConfirmLangCode: String? = null,
+    val showOriginalText: Boolean = false
 )
 
 @HiltViewModel
@@ -44,7 +46,8 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val languagePreferenceRepository: LanguagePreferenceRepository,
     private val translateRepository: TranslateRepository,
-    private val voskModelManager: VoskModelManager
+    private val voskModelManager: VoskModelManager,
+    private val displayPreferenceRepository: DisplayPreferenceRepository
 ) : ViewModel() {
 
     private val _sourceStatus = MutableStateFlow<SttModelStatus>(SttModelStatus.Idle)
@@ -55,9 +58,10 @@ class SettingsViewModel @Inject constructor(
         languagePreferenceRepository.selectedLanguages,
         _sourceStatus,
         _targetStatus,
-        _pendingCellularConfirm
-    ) { selected, sourceStatus, targetStatus, pending ->
-        SettingsUiState(selected, sourceStatus, targetStatus, pending)
+        _pendingCellularConfirm,
+        displayPreferenceRepository.showOriginalText
+    ) { selected, sourceStatus, targetStatus, pending, showOriginalText ->
+        SettingsUiState(selected, sourceStatus, targetStatus, pending, showOriginalText)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -82,6 +86,12 @@ class SettingsViewModel @Inject constructor(
     fun selectTargetLang(code: String) {
         languagePreferenceRepository.setTargetLang(code)
         downloadTranslateModel(code)
+    }
+
+    /** 설정 화면의 "원문 같이 보기" 스위치를 토글할 때 호출. 재시작 불필요, 즉시 반영. */
+    fun toggleShowOriginalText() {
+        val current = displayPreferenceRepository.showOriginalText.value
+        displayPreferenceRepository.setShowOriginalText(!current)
     }
 
     /** 셀룰러 확인 다이얼로그에서 "계속"을 눌렀을 때. */

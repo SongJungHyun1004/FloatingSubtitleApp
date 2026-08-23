@@ -8,6 +8,8 @@ import com.joker.floatingsubtitleapp.data.translate.MLKitTranslateRepository
 import com.joker.floatingsubtitleapp.domain.repository.TranslateRepository
 import com.joker.floatingsubtitleapp.data.settings.LanguagePreferenceRepositoryImpl
 import com.joker.floatingsubtitleapp.domain.repository.LanguagePreferenceRepository
+import com.joker.floatingsubtitleapp.data.settings.DisplayPreferenceRepositoryImpl
+import com.joker.floatingsubtitleapp.domain.repository.DisplayPreferenceRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -41,4 +43,10 @@ abstract class RepositoryModule {
     abstract fun bindLanguagePreferenceRepository(
         languagePreferenceRepositoryImpl: LanguagePreferenceRepositoryImpl
     ): LanguagePreferenceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDisplayPreferenceRepository(
+        displayPreferenceRepositoryImpl: DisplayPreferenceRepositoryImpl
+    ): DisplayPreferenceRepository
 }

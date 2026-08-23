@@ -48,6 +48,7 @@ fun SubtitleOverlay(
     isLocked: Boolean,
     isMinimized: Boolean,
     fixedSize: DpSize,
+    showOriginalText: Boolean,
     onDrag: (Float, Float) -> Unit,
     onResize: (Float, Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -110,12 +111,21 @@ fun SubtitleOverlay(
                     .fillMaxWidth()
             ) {
                 items(state.finalizedLines, key = { it.id }) { line ->
-                    Text(
-                        text = line.text,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    Column {
+                        Text(
+                            text = line.text,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        if (showOriginalText && line.originalText.isNotBlank()) {
+                            Text(
+                                text = line.originalText,
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
                 }
             }
 
@@ -126,6 +136,14 @@ fun SubtitleOverlay(
                     fontSize = 18.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (showOriginalText && state.partialOriginalText.isNotBlank()) {
+                    Text(
+                        text = state.partialOriginalText,
+                        color = Color.LightGray.copy(alpha = 0.5f),
+                        fontSize = 13.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
 
