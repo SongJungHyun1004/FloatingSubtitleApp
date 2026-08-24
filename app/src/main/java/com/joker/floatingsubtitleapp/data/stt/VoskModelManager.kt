@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.vosk.android.StorageService
 import java.io.File
@@ -29,6 +31,18 @@ sealed interface ModelPrepareProgress {
 class VoskModelManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    // 언어별로 독립된 락을 둬서, 서로 다른 언어는 동시에 받되(별개 파일이라
+    // 안전함) 같은 언어에 대한 요청은 순서대로만 처리되게 한다. 이게 없으면
+    // 같은 언어를 아주 빠르게 두 번 선택했을 때 같은 zip 파일에 동시에
+    // 쓰다가 깨질 수 있다.
+    private val locksByLang = mutableMapOf<String, Mutex>()
+    private val locksMapGuard = Mutex()
+
+    private suspend fun lockFor(langCode: String): Mutex =
+        locksMapGuard.withLock {
+            locksByLang.getOrPut(langCode) { Mutex() }
+        }
+
     /**
      * 언어별 Vosk 모델을 준비한다.
      * - "en"은 앱에 번들된 assets 모델을 그대로 푼다 (네트워크 불필요, 기존 동작 유지).
@@ -36,40 +50,42 @@ class VoskModelManager @Inject constructor(
      * - 이미 받아져 있으면(.complete 마커 존재) 재다운로드 없이 바로 Done을 낸다.
      */
     fun prepareModel(langCode: String): Flow<ModelPrepareProgress> = channelFlow {
-        if (langCode == "en") {
-            val path = unpackBundledEnglishModel()
-            send(ModelPrepareProgress.Done(path))
-            return@channelFlow
+        lockFor(langCode).withLock {
+            if (langCode == "en") {
+                val path = unpackBundledEnglishModel()
+                send(ModelPrepareProgress.Done(path))
+                return@withLock
+            }
+
+            val info = VoskModels.infoFor(langCode)
+                ?: throw IllegalArgumentException("Vosk가 지원하지 않는 언어입니다: $langCode")
+
+            val modelDir = File(context.getExternalFilesDir(null), "vosk-models/${info.langCode}")
+            val markerFile = File(modelDir, ".complete")
+
+            if (markerFile.exists()) {
+                send(ModelPrepareProgress.Done(resolveModelRoot(modelDir).absolutePath))
+                return@withLock
+            }
+
+            // 예전에 받다가 중단된 잔여 파일이 있으면 지우고 새로 받는다.
+            if (modelDir.exists()) modelDir.deleteRecursively()
+            modelDir.mkdirs()
+
+            val zipFile = File(context.cacheDir, "${info.modelName}.zip")
+
+            downloadFile(info.downloadUrl, zipFile) { fraction ->
+                trySend(ModelPrepareProgress.InProgress(fraction))
+            }
+
+            trySend(ModelPrepareProgress.InProgress(-1f)) // 압축 해제 단계
+            unzip(zipFile, modelDir)
+            zipFile.delete()
+
+            val actualRoot = resolveModelRoot(modelDir)
+            markerFile.createNewFile()
+            send(ModelPrepareProgress.Done(actualRoot.absolutePath))
         }
-
-        val info = VoskModels.infoFor(langCode)
-            ?: throw IllegalArgumentException("Vosk가 지원하지 않는 언어입니다: $langCode")
-
-        val modelDir = File(context.getExternalFilesDir(null), "vosk-models/${info.langCode}")
-        val markerFile = File(modelDir, ".complete")
-
-        if (markerFile.exists()) {
-            send(ModelPrepareProgress.Done(resolveModelRoot(modelDir).absolutePath))
-            return@channelFlow
-        }
-
-        // 예전에 받다가 중단된 잔여 파일이 있으면 지우고 새로 받는다.
-        if (modelDir.exists()) modelDir.deleteRecursively()
-        modelDir.mkdirs()
-
-        val zipFile = File(context.cacheDir, "${info.modelName}.zip")
-
-        downloadFile(info.downloadUrl, zipFile) { fraction ->
-            trySend(ModelPrepareProgress.InProgress(fraction))
-        }
-
-        trySend(ModelPrepareProgress.InProgress(-1f)) // 압축 해제 단계
-        unzip(zipFile, modelDir)
-        zipFile.delete()
-
-        val actualRoot = resolveModelRoot(modelDir)
-        markerFile.createNewFile()
-        send(ModelPrepareProgress.Done(actualRoot.absolutePath))
     }.flowOn(Dispatchers.IO)
 
     private suspend fun unpackBundledEnglishModel(): String = withContext(Dispatchers.IO) {
