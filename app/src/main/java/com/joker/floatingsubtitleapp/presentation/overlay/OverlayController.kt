@@ -53,6 +53,11 @@ class OverlayController @Inject constructor(
         // 스크롤해서 오래된 줄이 위로 밀려 나간다(잘리는 게 아니라 스크롤됨).
         private const val DEFAULT_WIDTH_DP = 260
         private const val DEFAULT_HEIGHT_DP = 120
+        // 최소화됐을 때 실제 창(터치 가능 영역) 크기. 지금까지는 최소화해도
+        // 창 크기가 기본값 그대로라, 화면상 안 보이는 빈 공간이 여전히 터치를
+        // 가로채서 밑에 있는 다른 앱을 못 눌렀다. 이제 최소화 시 이 작은
+        // 크기로 실제로 줄여서 그 문제를 없앤다.
+        private const val MINIMIZED_SIZE_DP = 48
     }
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -80,6 +85,7 @@ class OverlayController @Inject constructor(
     private val minHeightPx = (MIN_HEIGHT_DP * density).toInt()
     private val defaultWidthPx = (DEFAULT_WIDTH_DP * density).toInt()
     private val defaultHeightPx = (DEFAULT_HEIGHT_DP * density).toInt()
+    private val minimizedSizePx = (MINIMIZED_SIZE_DP * density).toInt()
     // Application Context의 resources.displayMetrics.widthPixels는 실제 화면
     // 크기와 어긋나는 경우가 있어서(오버레이처럼 특정 디스플레이에 안 묶인
     // 컨텍스트에서 특히), WindowManager가 실제로 알고 있는 크기를 대신 쓴다.
@@ -156,8 +162,13 @@ class OverlayController @Inject constructor(
                         onResize = { dx, dy -> updateSize(dx, dy) },
                         onToggleLock = { isLockedState.value = !isLockedState.value },
                         onToggleMinimize = {
-                            isMinimizedState.value = !isMinimizedState.value
-                            resetSizeToDefault()
+                            val nowMinimized = !isMinimizedState.value
+                            isMinimizedState.value = nowMinimized
+                            if (nowMinimized) {
+                                applyMinimizedSize()
+                            } else {
+                                resetSizeToDefault()
+                            }
                         },
                         onReturnToApp = { returnToApp() },
                         onStopService = { stopService() }
@@ -191,6 +202,15 @@ class OverlayController @Inject constructor(
             windowManager.updateViewLayout(view, params)
 
             windowSizeState.value = DpSize((newWidthPx / density).dp, (newHeightPx / density).dp)
+        }
+    }
+
+    private fun applyMinimizedSize() {
+        composeView?.let { view ->
+            params.width = minimizedSizePx
+            params.height = minimizedSizePx
+            windowManager.updateViewLayout(view, params)
+            windowSizeState.value = DpSize(MINIMIZED_SIZE_DP.dp, MINIMIZED_SIZE_DP.dp)
         }
     }
 
