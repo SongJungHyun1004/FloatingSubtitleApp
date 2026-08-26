@@ -156,10 +156,10 @@ fun SubtitleOverlay(
                 .size(20.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.5f))
-                .pointerInput(Unit) {
+                .pointerInput(isLocked) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        onResize(dragAmount.x, dragAmount.y)
+                        if (!isLocked) onResize(dragAmount.x, dragAmount.y)
                     }
                 }
         )

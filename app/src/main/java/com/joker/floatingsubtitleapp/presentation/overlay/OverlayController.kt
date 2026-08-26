@@ -207,6 +207,13 @@ class OverlayController @Inject constructor(
 
     private fun applyMinimizedSize() {
         composeView?.let { view ->
+            // 그냥 크기만 줄이면 왼쪽 상단 기준으로 줄어들어서, 최소화된
+            // 아이콘이 예전 박스의 왼쪽 위 구석에 붙어버린다. 대신 예전 박스의
+            // 가로 중앙을 계산해서, 그 중앙에 맞춰 작아지도록 x를 보정한다
+            // (위쪽 기준은 그대로 유지 - "가운데 상단"으로 온다).
+            val previousCenterX = params.x + params.width / 2
+            params.x = previousCenterX - minimizedSizePx / 2
+
             params.width = minimizedSizePx
             params.height = minimizedSizePx
             windowManager.updateViewLayout(view, params)
@@ -216,6 +223,12 @@ class OverlayController @Inject constructor(
 
     private fun resetSizeToDefault() {
         composeView?.let { view ->
+            // 최소화 때와 대칭되는 보정. 그냥 크기만 키우면 최소화 아이콘의
+            // 왼쪽 상단 기준으로 커져서 비대칭으로 보인다. 대신 최소화 아이콘의
+            // 가로 중앙을 기준으로 커지도록 x를 보정한다.
+            val previousCenterX = params.x + params.width / 2
+            params.x = previousCenterX - defaultWidthPx / 2
+
             params.width = defaultWidthPx
             params.height = defaultHeightPx
             windowManager.updateViewLayout(view, params)
