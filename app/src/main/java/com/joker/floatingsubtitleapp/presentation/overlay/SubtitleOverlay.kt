@@ -57,7 +57,7 @@ fun SubtitleOverlay(
     onStopService: () -> Unit
 ) {
     if (isMinimized) {
-        MinimizedBar(onRestore = onToggleMinimize)
+        MinimizedBar(isLocked = isLocked, onDrag = onDrag, onRestore = onToggleMinimize)
         return
     }
 
@@ -205,10 +205,20 @@ private fun OverlayIconButton(icon: ImageVector, contentDescription: String, onC
 }
 
 @Composable
-private fun MinimizedBar(onRestore: () -> Unit) {
+private fun MinimizedBar(
+    isLocked: Boolean,
+    onDrag: (Float, Float) -> Unit,
+    onRestore: () -> Unit
+) {
     Box(
         modifier = Modifier
             .wrapContentSize()
+            .pointerInput(isLocked) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    if (!isLocked) onDrag(dragAmount.x, dragAmount.y)
+                }
+            }
             .clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.6f))
     ) {
