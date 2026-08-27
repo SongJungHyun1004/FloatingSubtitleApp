@@ -27,8 +27,9 @@ class VoskSpeechEngine @Inject constructor(
     // 모델 로딩(다운로드/디스크IO/네이티브 초기화)이 동시에 겹치지 않도록 하는 락
     private val modelLoadLock = Mutex()
 
-    // 언어별로 한 번 로드한 Model을 캐싱한다. 언어를 왔다갔다 바꿔도
-    // 매번 처음부터 다시 로드하지 않기 위함이다. 앱이 살아있는 동안 유지된다.
+    // 현재 사용 중인 언어의 Model만 캐싱한다. 새 언어로 바뀌면 이전 언어의
+    // Model은 close()로 정리되고 캐시에서 빠진다(getOrLoadModel 참고) -
+    // 여러 언어를 오갈 때 네이티브 메모리가 계속 쌓이는 걸 막기 위함이다.
     private val loadedModels = mutableMapOf<String, Model>()
 
     private suspend fun getOrLoadModel(langCode: String): Model {
@@ -50,6 +51,19 @@ class VoskSpeechEngine @Inject constructor(
             }
             val path = finalPath ?: error("모델 경로를 가져오지 못했습니다 ($langCode)")
             Log.d(TAG, "🔍 캐시 미스, 새로 로드: langCode=$langCode, path=$path")
+
+            // 새 언어를 로드하기 전에, 더 이상 안 쓰는 이전 언어들의 Model을
+            // 전부 닫아서 네이티브 메모리를 해제한다. 여러 언어를 자주 오가도
+            // 계속 쌓이지 않도록 "현재 언어 하나만" 유지하는 정책이다.
+            // (이 시점엔 이전 세션의 Recognizer가 이미 완전히 정리된 뒤라
+            // 안전하게 닫을 수 있다 - captureJob의 cancelAndJoin 순서 보장 덕분)
+            loadedModels.entries.removeAll { (oldLang, oldModel) ->
+                Log.d(TAG, "🔍 안 쓰는 모델 정리: langCode=$oldLang")
+                runCatching { oldModel.close() }.onFailure { e ->
+                    Log.w(TAG, "이전 모델 close() 실패($oldLang): ${e.message}", e)
+                }
+                true
+            }
 
             val model = Model(path)
             loadedModels[langCode] = model
