@@ -6,11 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import org.vosk.android.StorageService
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -18,8 +15,6 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 sealed interface ModelPrepareProgress {
     /** fraction: 0f~1f 다운로드 진행률, -1f면 진행률을 알 수 없는 단계(압축 해제 등). */
@@ -44,19 +39,14 @@ class VoskModelManager @Inject constructor(
         }
 
     /**
-     * 언어별 Vosk 모델을 준비한다.
-     * - "en"은 앱에 번들된 assets 모델을 그대로 푼다 (네트워크 불필요, 기존 동작 유지).
-     * - 그 외 언어는 Vosk 공식 서버에서 zip을 받아 로컬에 풀어둔다.
-     * - 이미 받아져 있으면(.complete 마커 존재) 재다운로드 없이 바로 Done을 낸다.
+     * 언어별 Vosk 모델을 준비한다. VoskModels.downloadable에 등록된 언어는
+     * 전부 이 공통 경로(다운로드 -> 압축 해제)를 탄다. en도 예외가 아니다 -
+     * 예전엔 en만 assets에 번들된 Small 모델을 썼는데, 정확도가 더 높은
+     * lgraph 모델로 품질을 올리면서 다른 언어들과 동일하게 통일했다.
+     * 이미 받아져 있으면(.complete 마커 존재) 재다운로드 없이 바로 Done을 낸다.
      */
     fun prepareModel(langCode: String): Flow<ModelPrepareProgress> = channelFlow {
         lockFor(langCode).withLock {
-            if (langCode == "en") {
-                val path = unpackBundledEnglishModel()
-                send(ModelPrepareProgress.Done(path))
-                return@withLock
-            }
-
             val info = VoskModels.infoFor(langCode)
                 ?: throw IllegalArgumentException("Vosk가 지원하지 않는 언어입니다: $langCode")
 
@@ -87,31 +77,6 @@ class VoskModelManager @Inject constructor(
             send(ModelPrepareProgress.Done(actualRoot.absolutePath))
         }
     }.flowOn(Dispatchers.IO)
-
-    private suspend fun unpackBundledEnglishModel(): String = withContext(Dispatchers.IO) {
-        val basePath = suspendCancellableCoroutine { continuation ->
-            StorageService.unpack(
-                context,
-                "model",
-                "vosk-model",
-                { model ->
-                    if (continuation.isActive) {
-                        continuation.resume("${context.getExternalFilesDir(null)}/vosk-model")
-                    }
-                },
-                { exception ->
-                    if (continuation.isActive) {
-                        continuation.resumeWithException(exception)
-                    }
-                }
-            )
-        }
-
-        // 예전 버전에 있었다가 언어별 다운로드 기능을 추가하며 빠졌던 보정.
-        // 번들 zip 구조에 따라 실제 모델 파일이 "vosk-model/model/" 처럼 한 단계
-        // 더 안쪽에 있는 경우가 있어서, 그 하위 폴더가 있으면 그걸 실제 경로로 쓴다.
-        File(basePath, "model").takeIf { it.exists() }?.absolutePath ?: basePath
-    }
 
     // Vosk zip은 보통 "vosk-model-small-xx-0.xx/" 하위 폴더 하나를 포함한다.
     // Model()이 바로 쓸 수 있도록 그 하위 폴더를 실제 모델 루트로 잡아준다.

@@ -1,8 +1,7 @@
 package com.joker.floatingsubtitleapp.data.stt
 
 /**
- * Vosk 공식 "small" 모델 정보. 출처: https://alphacephei.com/vosk/models
- * en은 앱에 이미 assets로 번들되어 있어서 이 목록에 없다 (다운로드 불필요).
+ * Vosk 모델 정보. 출처: https://alphacephei.com/vosk/models
  * 여기 없는 언어는 Vosk가 공식 모델을 제공하지 않는 언어라 STT 소스 언어로 쓸 수 없다
  * (예: 태국어 - 커뮤니티 프로젝트만 있고 Vosk 정식 포맷 모델이 없음).
  */
@@ -15,6 +14,13 @@ data class VoskModelInfo(
 
 object VoskModels {
     val downloadable = listOf(
+        // en: Small(40MB) 대신 정확도가 더 높은 중간 등급(lgraph, ~128MB) 모델을 쓴다.
+        // 품질 개선을 위해 의도적으로 바꾼 것 - assets 번들 대신 다른 언어들처럼
+        // 런타임에 다운로드한다.
+        VoskModelInfo(
+            "en", "vosk-model-en-us-0.22-lgraph",
+            "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip", 128
+        ),
         VoskModelInfo(
             "ko", "vosk-model-small-ko-0.22",
             "https://alphacephei.com/vosk/models/vosk-model-small-ko-0.22.zip", 82
@@ -51,6 +57,6 @@ object VoskModels {
 
     fun infoFor(langCode: String): VoskModelInfo? = downloadable.firstOrNull { it.langCode == langCode }
 
-    /** STT 소스 언어로 선택 가능한 전체 언어 코드 (en 포함, 번들 여부 무관). */
-    val allSttSupportedLangCodes: Set<String> = (downloadable.map { it.langCode } + "en").toSet()
+    /** STT 소스 언어로 선택 가능한 전체 언어 코드. */
+    val allSttSupportedLangCodes: Set<String> = downloadable.map { it.langCode }.toSet()
 }
