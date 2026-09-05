@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.joker.floatingsubtitleapp.domain.repository.HistoryRepository
 import com.joker.floatingsubtitleapp.domain.usecase.GetSubtitleFlowUseCase
 import com.joker.floatingsubtitleapp.presentation.overlay.OverlayController
 import com.joker.floatingsubtitleapp.presentation.overlay.SubtitleLineManager
@@ -32,8 +33,12 @@ class SubtitleService : Service() {
     @Inject
     lateinit var serviceStateHolder: ServiceStateHolder
 
+    @Inject
+    lateinit var historyRepository: HistoryRepository
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var captureJob: Job? = null
+    private var sessionStartedAt: Long = 0L
 
     companion object {
         private const val TAG = "SubtitleService"
@@ -100,6 +105,7 @@ class SubtitleService : Service() {
     ) {
         Log.d(TAG, "startSubtitlePipeline 시작 ($sourceLang -> $targetLang)")
         val previousJob = captureJob
+        sessionStartedAt = System.currentTimeMillis()
         subtitleLineManager.clear()
         overlayController.show()
         serviceStateHolder.setRunning(sourceLang, targetLang)
@@ -136,6 +142,25 @@ class SubtitleService : Service() {
         captureJob?.cancel()
         getSubtitleFlowUseCase.stop()
         overlayController.hide()
+
+        // clear()로 지우기 전에 이번 세션의 자막을 기록으로 저장한다.
+        // runBlocking을 쓰는 이유: onDestroy()는 suspend가 아니고, 아래
+        // serviceScope.cancel()이 곧바로 실행되기 때문에 launch로 fire-and-forget
+        // 하면 저장이 채 끝나기도 전에 취소될 수 있다. 세션 하나 저장은
+        // 로컬 DB에 몇 줄 넣는 정도라 짧게 블로킹해도 무방하다고 판단했다.
+        val linesToSave = subtitleLineManager.uiState.value.finalizedLines
+        val running = serviceStateHolder.runningLanguages.value
+        if (linesToSave.isNotEmpty() && running != null) {
+            runBlocking {
+                historyRepository.saveSession(
+                    startedAt = sessionStartedAt,
+                    sourceLang = running.sourceLang,
+                    targetLang = running.targetLang,
+                    lines = linesToSave
+                )
+            }
+        }
+
         subtitleLineManager.clear()
         serviceStateHolder.setStopped()
         serviceScope.cancel()

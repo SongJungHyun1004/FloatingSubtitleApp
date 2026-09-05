@@ -55,6 +55,11 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.play.services)
 
+    // Local DB (자막 기록 저장)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
