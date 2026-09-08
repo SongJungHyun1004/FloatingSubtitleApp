@@ -27,16 +27,29 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.joker.floatingsubtitleapp.domain.model.RecordedSessionSummary
+import com.joker.floatingsubtitleapp.presentation.history.HistoryScreen
+import com.joker.floatingsubtitleapp.presentation.history.SessionDetailScreen
 import com.joker.floatingsubtitleapp.presentation.main.MainViewModel
 import com.joker.floatingsubtitleapp.presentation.service.SubtitleService
 import com.joker.floatingsubtitleapp.presentation.settings.LanguageSelectionSection
 import com.joker.floatingsubtitleapp.presentation.settings.ModelDownloadStatus
 import com.joker.floatingsubtitleapp.presentation.settings.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
+
+/** 네비게이션 라이브러리 없이, 이 앱 안에서만 쓰는 아주 단순한 화면 전환용 상태. */
+private sealed interface AppScreen {
+    data object Main : AppScreen
+    data object History : AppScreen
+    data class SessionDetail(val session: RecordedSessionSummary) : AppScreen
+}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -83,16 +96,29 @@ class MainActivity : ComponentActivity() {
         checkInitialPermissions()
 
         setContent {
+            var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Main) }
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MainScreen(
-                        onStart = { sourceLang, targetLang ->
-                            pendingSourceLang = sourceLang
-                            pendingTargetLang = targetLang
-                            startAudioCaptureWithPermission()
-                        },
-                        onStop = { stopService(Intent(this, SubtitleService::class.java)) }
-                    )
+                    when (val screen = currentScreen) {
+                        is AppScreen.Main -> MainScreen(
+                            onStart = { sourceLang, targetLang ->
+                                pendingSourceLang = sourceLang
+                                pendingTargetLang = targetLang
+                                startAudioCaptureWithPermission()
+                            },
+                            onStop = { stopService(Intent(this, SubtitleService::class.java)) },
+                            onOpenHistory = { currentScreen = AppScreen.History }
+                        )
+                        is AppScreen.History -> HistoryScreen(
+                            onBack = { currentScreen = AppScreen.Main },
+                            onOpenSession = { session -> currentScreen = AppScreen.SessionDetail(session) }
+                        )
+                        is AppScreen.SessionDetail -> SessionDetailScreen(
+                            session = screen.session,
+                            onBack = { currentScreen = AppScreen.History }
+                        )
+                    }
                 }
             }
         }
@@ -120,6 +146,7 @@ class MainActivity : ComponentActivity() {
     fun MainScreen(
         onStart: (sourceLang: String, targetLang: String) -> Unit,
         onStop: () -> Unit,
+        onOpenHistory: () -> Unit,
         settingsViewModel: SettingsViewModel = hiltViewModel(),
         mainViewModel: MainViewModel = hiltViewModel()
     ) {
@@ -171,6 +198,10 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
                 Text("자막 서비스 중지")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
+                Text("자막 기록 보기")
             }
         }
     }
