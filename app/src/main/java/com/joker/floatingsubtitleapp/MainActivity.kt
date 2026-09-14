@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -110,14 +111,20 @@ class MainActivity : ComponentActivity() {
                             onStop = { stopService(Intent(this, SubtitleService::class.java)) },
                             onOpenHistory = { currentScreen = AppScreen.History }
                         )
-                        is AppScreen.History -> HistoryScreen(
-                            onBack = { currentScreen = AppScreen.Main },
-                            onOpenSession = { session -> currentScreen = AppScreen.SessionDetail(session) }
-                        )
-                        is AppScreen.SessionDetail -> SessionDetailScreen(
-                            session = screen.session,
-                            onBack = { currentScreen = AppScreen.History }
-                        )
+                        is AppScreen.History -> {
+                            BackHandler { currentScreen = AppScreen.Main }
+                            HistoryScreen(
+                                onBack = { currentScreen = AppScreen.Main },
+                                onOpenSession = { session -> currentScreen = AppScreen.SessionDetail(session) }
+                            )
+                        }
+                        is AppScreen.SessionDetail -> {
+                            BackHandler { currentScreen = AppScreen.History }
+                            SessionDetailScreen(
+                                session = screen.session,
+                                onBack = { currentScreen = AppScreen.History }
+                            )
+                        }
                     }
                 }
             }
