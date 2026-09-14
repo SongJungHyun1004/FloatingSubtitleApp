@@ -8,7 +8,9 @@ data class SessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val startedAt: Long,
     val sourceLang: String,
-    val targetLang: String
+    val targetLang: String,
+    /** null이면 화면에서 "원본언어 → 대상언어" 기본 제목으로 표시한다. */
+    val title: String? = null
 )
 
 @Entity(tableName = "session_lines")

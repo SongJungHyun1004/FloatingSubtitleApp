@@ -27,6 +27,9 @@ interface HistoryDao {
     @Query("SELECT * FROM sessions ORDER BY startedAt DESC")
     fun observeSessions(): Flow<List<SessionEntity>>
 
+    @Query("UPDATE sessions SET title = :title WHERE id = :sessionId")
+    suspend fun updateTitle(sessionId: Long, title: String?)
+
     @Query("SELECT * FROM session_lines WHERE sessionId = :sessionId ORDER BY orderIndex")
     suspend fun getLines(sessionId: Long): List<SessionLineEntity>
 

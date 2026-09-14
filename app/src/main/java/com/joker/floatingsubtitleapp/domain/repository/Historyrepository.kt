@@ -19,5 +19,7 @@ interface HistoryRepository {
 
     suspend fun getLines(sessionId: Long): List<RecordedLine>
 
+    suspend fun renameSession(sessionId: Long, title: String)
+
     suspend fun deleteSession(sessionId: Long)
 }

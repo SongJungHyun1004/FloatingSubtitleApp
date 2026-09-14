@@ -41,6 +41,7 @@ fun SessionDetailScreen(
             .padding(16.dp)
     ) {
         TextButton(onClick = onBack) { Text("← 뒤로") }
+        Text(SessionTextFormatter.displayTitle(session), style = MaterialTheme.typography.headlineSmall)
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

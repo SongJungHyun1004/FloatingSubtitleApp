@@ -16,7 +16,7 @@ class HistoryRepositoryImpl @Inject constructor(
 
     override val sessions: Flow<List<RecordedSessionSummary>> =
         dao.observeSessions().map { list ->
-            list.map { RecordedSessionSummary(it.id, it.startedAt, it.sourceLang, it.targetLang) }
+            list.map { RecordedSessionSummary(it.id, it.startedAt, it.sourceLang, it.targetLang, it.title) }
         }
 
     override suspend fun saveSession(
@@ -41,6 +41,10 @@ class HistoryRepositoryImpl @Inject constructor(
 
     override suspend fun getLines(sessionId: Long): List<RecordedLine> =
         dao.getLines(sessionId).map { RecordedLine(it.originalText, it.translatedText) }
+
+    override suspend fun renameSession(sessionId: Long, title: String) {
+        dao.updateTitle(sessionId, title.ifBlank { null })
+    }
 
     override suspend fun deleteSession(sessionId: Long) {
         dao.deleteSessionWithLines(sessionId)

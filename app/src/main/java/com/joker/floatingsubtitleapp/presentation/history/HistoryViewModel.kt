@@ -28,4 +28,10 @@ class HistoryViewModel @Inject constructor(
             historyRepository.deleteSession(sessionId)
         }
     }
+
+    fun renameSession(sessionId: Long, title: String) {
+        viewModelScope.launch {
+            historyRepository.renameSession(sessionId, title)
+        }
+    }
 }
