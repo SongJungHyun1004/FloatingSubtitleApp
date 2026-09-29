@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.joker.floatingsubtitleapp.domain.model.SubtitleFontSize
 import com.joker.floatingsubtitleapp.domain.model.SubtitleUiState
 
 @Composable
@@ -49,6 +50,7 @@ fun SubtitleOverlay(
     isMinimized: Boolean,
     fixedSize: DpSize,
     showOriginalText: Boolean,
+    fontSize: SubtitleFontSize,
     onDrag: (Float, Float) -> Unit,
     onResize: (Float, Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -116,13 +118,13 @@ fun SubtitleOverlay(
                             text = line.text,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = fontSize.translatedSp.sp
                         )
                         if (showOriginalText && line.originalText.isNotBlank()) {
                             Text(
                                 text = line.originalText,
                                 color = Color.White.copy(alpha = 0.5f),
-                                fontSize = 13.sp
+                                fontSize = fontSize.originalSp.sp
                             )
                         }
                     }
@@ -133,14 +135,14 @@ fun SubtitleOverlay(
                 Text(
                     text = state.partialText,
                     color = Color.LightGray,
-                    fontSize = 18.sp,
+                    fontSize = fontSize.translatedSp.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (showOriginalText && state.partialOriginalText.isNotBlank()) {
                     Text(
                         text = state.partialOriginalText,
                         color = Color.LightGray.copy(alpha = 0.5f),
-                        fontSize = 13.sp,
+                        fontSize = fontSize.originalSp.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

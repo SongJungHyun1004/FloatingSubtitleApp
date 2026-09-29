@@ -8,6 +8,7 @@ import com.joker.floatingsubtitleapp.data.stt.NetworkUtils
 import com.joker.floatingsubtitleapp.data.stt.VoskModelManager
 import com.joker.floatingsubtitleapp.data.stt.VoskModels
 import com.joker.floatingsubtitleapp.domain.model.SelectedLanguages
+import com.joker.floatingsubtitleapp.domain.model.SubtitleFontSize
 import com.joker.floatingsubtitleapp.domain.repository.DisplayPreferenceRepository
 import com.joker.floatingsubtitleapp.domain.repository.LanguagePreferenceRepository
 import com.joker.floatingsubtitleapp.domain.repository.TranslateRepository
@@ -38,7 +39,8 @@ data class SettingsUiState(
     val targetStatus: ModelDownloadStatus = ModelDownloadStatus.IDLE,
     /** null이 아니면 "이동통신에서 큰 모델을 받아도 되는지" 확인 다이얼로그를 띄워야 함 */
     val pendingCellularConfirmLangCode: String? = null,
-    val showOriginalText: Boolean = false
+    val showOriginalText: Boolean = false,
+    val fontSize: SubtitleFontSize = SubtitleFontSize.MEDIUM
 )
 
 @HiltViewModel
@@ -59,9 +61,17 @@ class SettingsViewModel @Inject constructor(
         _sourceStatus,
         _targetStatus,
         _pendingCellularConfirm,
-        displayPreferenceRepository.showOriginalText
-    ) { selected, sourceStatus, targetStatus, pending, showOriginalText ->
-        SettingsUiState(selected, sourceStatus, targetStatus, pending, showOriginalText)
+        displayPreferenceRepository.showOriginalText,
+        displayPreferenceRepository.fontSize
+    ) { values ->
+        SettingsUiState(
+            selected = values[0] as SelectedLanguages,
+            sourceStatus = values[1] as SttModelStatus,
+            targetStatus = values[2] as ModelDownloadStatus,
+            pendingCellularConfirmLangCode = values[3] as String?,
+            showOriginalText = values[4] as Boolean,
+            fontSize = values[5] as SubtitleFontSize
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -94,6 +104,11 @@ class SettingsViewModel @Inject constructor(
         displayPreferenceRepository.setShowOriginalText(!current)
     }
 
+    /** 설정 화면의 폰트 크기 프리셋(소/중/대)을 바꿀 때 호출. 재시작 불필요, 즉시 반영. */
+    fun setFontSize(size: SubtitleFontSize) {
+        displayPreferenceRepository.setFontSize(size)
+    }
+
     /** 셀룰러 확인 다이얼로그에서 "계속"을 눌렀을 때. */
     fun confirmCellularDownload() {
         val code = _pendingCellularConfirm.value ?: return
@@ -108,11 +123,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun prepareSttModel(langCode: String, skipCellularCheck: Boolean) {
-        // en은 assets 번들이라 네트워크가 아예 필요 없어서 확인 없이 바로 진행.
-        val needsNetworkCheck = !skipCellularCheck && langCode != "en"
+        // en도 이제 lgraph 모델(128MB)을 네트워크로 받는다 - 예전엔 assets 번들이라
+        // 예외 처리했었는데, 그 특수 케이스가 사라진 뒤에도 여기 남아있어서
+        // en만 이동통신 확인 없이 그냥 다운로드되는 버그가 있었다. 제거함.
+        val needsNetworkCheck = !skipCellularCheck
 
         if (needsNetworkCheck && !NetworkUtils.isOnWifi(context)) {
-            val sizeMb = VoskModels.infoFor(langCode)?.approxSizeMb
             _pendingCellularConfirm.value = langCode
             _sourceStatus.value = SttModelStatus.Downloading(-1f) // 확인 대기 중임을 표시
             // 정확한 용량은 다이얼로그 쪽에서 VoskModels.infoFor(code)로 다시 조회해서 보여준다.

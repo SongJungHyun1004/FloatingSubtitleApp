@@ -151,6 +151,7 @@ class OverlayController @Inject constructor(
                     val isMinimized by isMinimizedState
                     val windowSize by windowSizeState
                     val showOriginalText by displayPreferenceRepository.showOriginalText.collectAsState()
+                    val fontSize by displayPreferenceRepository.fontSize.collectAsState()
 
                     SubtitleOverlay(
                         state = uiState,
@@ -158,6 +159,7 @@ class OverlayController @Inject constructor(
                         isMinimized = isMinimized,
                         fixedSize = windowSize,
                         showOriginalText = showOriginalText,
+                        fontSize = fontSize,
                         onDrag = { dx, dy -> if (!isLocked) updatePosition(dx, dy) },
                         onResize = { dx, dy -> updateSize(dx, dy) },
                         onToggleLock = { isLockedState.value = !isLockedState.value },

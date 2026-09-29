@@ -1,5 +1,6 @@
 package com.joker.floatingsubtitleapp.domain.repository
 
+import com.joker.floatingsubtitleapp.domain.model.SubtitleFontSize
 import kotlinx.coroutines.flow.StateFlow
 
 interface DisplayPreferenceRepository {
@@ -7,4 +8,9 @@ interface DisplayPreferenceRepository {
     val showOriginalText: StateFlow<Boolean>
 
     fun setShowOriginalText(enabled: Boolean)
+
+    /** 자막 폰트 크기 프리셋(소/중/대). */
+    val fontSize: StateFlow<SubtitleFontSize>
+
+    fun setFontSize(size: SubtitleFontSize)
 }

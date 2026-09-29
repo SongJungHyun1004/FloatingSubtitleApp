@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.joker.floatingsubtitleapp.data.stt.VoskModels
+import com.joker.floatingsubtitleapp.domain.model.SubtitleFontSize
 
 @Composable
 fun LanguageSelectionSection(viewModel: SettingsViewModel) {
@@ -59,6 +61,25 @@ fun LanguageSelectionSection(viewModel: SettingsViewModel) {
                 checked = uiState.showOriginalText,
                 onCheckedChange = { viewModel.toggleShowOriginalText() }
             )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+        ) {
+            Text("자막 글자 크기", style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SubtitleFontSize.entries.forEach { size ->
+                    FilterChip(
+                        selected = uiState.fontSize == size,
+                        onClick = { viewModel.setFontSize(size) },
+                        label = { Text(size.label) }
+                    )
+                }
+            }
         }
     }
 
