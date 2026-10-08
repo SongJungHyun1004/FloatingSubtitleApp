@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "플로팅 자막",
+                text = "실시간 번역 자막",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
