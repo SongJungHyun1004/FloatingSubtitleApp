@@ -9,4 +9,7 @@ interface LanguagePreferenceRepository {
 
     fun setSourceLang(code: String)
     fun setTargetLang(code: String)
+
+    /** 원본/대상 언어를 서로 맞바꾼다. (번역앱 스타일의 스왑 버튼용) */
+    fun swapLanguages()
 }

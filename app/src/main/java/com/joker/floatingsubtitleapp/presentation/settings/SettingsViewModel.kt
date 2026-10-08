@@ -98,6 +98,30 @@ class SettingsViewModel @Inject constructor(
         downloadTranslateModel(code)
     }
 
+    /**
+     * 번역앱 스타일 화면의 스왑 버튼. 원본/대상 언어를 맞바꾸고,
+     * 새 원본 언어의 STT 모델과 새 대상 언어의 번역 모델을 각각 다시 준비시킨다.
+     *
+     * 주의: 번역 대상 언어 목록(SupportedLanguages.all)에는 태국어처럼 Vosk가
+     * 공식 모델을 제공하지 않아 음성인식 원본 언어로는 쓸 수 없는 언어도 있다.
+     * 그런 언어가 현재 대상 언어일 때 스왑하면 원본으로 쓸 수 없으므로,
+     * 그 경우는 스왑을 막고 실패 상태로 알려준다.
+     */
+    fun swapLanguages() {
+        val current = languagePreferenceRepository.selectedLanguages.value
+        val newSourceLang = current.targetLang
+        if (newSourceLang !in VoskModels.allSttSupportedLangCodes) {
+            _sourceStatus.value = SttModelStatus.Failed(
+                "$newSourceLang 언어는 음성인식(원본 언어)으로 지원되지 않습니다"
+            )
+            return
+        }
+        languagePreferenceRepository.swapLanguages()
+        val swapped = languagePreferenceRepository.selectedLanguages.value
+        prepareSttModel(swapped.sourceLang, skipCellularCheck = false)
+        downloadTranslateModel(swapped.targetLang)
+    }
+
     /** 설정 화면의 "원문 같이 보기" 스위치를 토글할 때 호출. 재시작 불필요, 즉시 반영. */
     fun toggleShowOriginalText() {
         val current = displayPreferenceRepository.showOriginalText.value

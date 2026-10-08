@@ -43,4 +43,17 @@ class LanguagePreferenceRepositoryImpl @Inject constructor(
         prefs.edit { putString(KEY_TARGET_LANG, code) }
         _selectedLanguages.value = _selectedLanguages.value.copy(targetLang = code)
     }
+
+    override fun swapLanguages() {
+        val current = _selectedLanguages.value
+        val swapped = SelectedLanguages(
+            sourceLang = current.targetLang,
+            targetLang = current.sourceLang
+        )
+        prefs.edit {
+            putString(KEY_SOURCE_LANG, swapped.sourceLang)
+            putString(KEY_TARGET_LANG, swapped.targetLang)
+        }
+        _selectedLanguages.value = swapped
+    }
 }
